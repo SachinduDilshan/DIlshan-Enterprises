@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Users, Bell } from "lucide-react";
 import UserManagement from "./users/UserManagement";
-import NotificationSettings from "./NotificationSettings";
+//import NotificationSettings from "./NotificationSettings";
 
 const TABS = [
   { key: "users",  label: "Users",         icon: Users },
@@ -42,7 +42,7 @@ export default function SettingsPage() {
       </div>
 
       {tab === "users"  && <UserManagement />}
-      {tab === "alerts" && <NotificationSettings />}
+     {/** {tab === "alerts" && <NotificationSettings />} **/}
     </div>
   );
 }
