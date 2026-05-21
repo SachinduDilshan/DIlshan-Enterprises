@@ -17,7 +17,7 @@ export function useShops(activeOnly = true) {
 
     const unsub = onSnapshot(q,
       (snap) => {
-        setShops(snap.docs.map(d => ({ id: d.id, ...d.data() } as Shop)));
+        setShops(snap.docs.map(d => ({ ...d.data(), id: d.id } as Shop)));
         setLoading(false);
       },
       (err) => { setError(err.message); setLoading(false); }
