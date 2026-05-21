@@ -11,6 +11,7 @@
 .env
 .env.local
 .env*.local
+firebase.ts
 
 # misc
 .DS_Store
