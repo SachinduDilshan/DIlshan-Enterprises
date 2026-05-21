@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, FileText, CalendarClock, Package,
   RotateCcw, Truck, Settings, LogOut, Store,
+  Book,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -14,12 +15,12 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard",             label: "Dashboard",  icon: LayoutDashboard },
   { href: "/dashboard/shops",       label: "Shops",      icon: Store           },
-  { href: "/dashboard/invoices",    label: "Invoices",   icon: FileText        },
+  { href: "/dashboard/invoices",    label: "Invoices",   icon: FileText       },
   { href: "/dashboard/cheques",     label: "Cheques",    icon: CalendarClock   },
   { href: "/dashboard/inventory",   label: "Inventory",  icon: Package         },
   { href: "/dashboard/uc-returns",  label: "UC Returns", icon: RotateCcw       },
   { href: "/dashboard/dispatch",    label: "Dispatch",   icon: Truck           },
-  { href: "/dashboard/reports",     label: "Reports",    icon: FileText        },
+  { href: "/dashboard/reports",     label: "Reports",    icon: Book    },
 ];
 
 export function Sidebar() {

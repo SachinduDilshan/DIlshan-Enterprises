@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, CalendarClock, Package, Store } from "lucide-react";
+import { LayoutDashboard, FileText, CalendarClock, Package, Store, BookA } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -11,7 +11,7 @@ const tabs = [
   { href: "/dashboard/invoices",  label: "Invoice", icon: FileText        },
   { href: "/dashboard/cheques",   label: "Cheques", icon: CalendarClock   },
   { href: "/dashboard/inventory", label: "Stock",   icon: Package         },
-  { href: "/dashboard/reports",   label: "Reports", icon: FileText        },
+  { href: "/dashboard/reports",   label: "Reports", icon: BookA        },
 ];
 
 export function MobileNav() {

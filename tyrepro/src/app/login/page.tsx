@@ -44,7 +44,7 @@ export default function LoginPage() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600">
             <CircleDot className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900">TyrePro</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Dilshan Enterprises</h1>
           <p className="text-sm text-gray-500">Sign in to your account</p>
         </div>
 
