@@ -1,37 +1,120 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
-import { Card } from "@/components/ui/Card";
-import { Package, FileText, CalendarClock, RotateCcw, TrendingUp, AlertTriangle } from "lucide-react";
-import Link from "next/link";
 import { useStock } from "@/hooks/useStock";
+import { useAlerts } from "@/hooks/useAlerts";
+import { Card } from "@/components/ui/Card";
+import {
+  Package, FileText, CalendarClock, RotateCcw,
+  TrendingUp, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, orderBy, limit, Timestamp } from "firebase/firestore";
+import {
+  collection, query, where, getDocs,
+  orderBy, Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatLKR } from "@/lib/utils";
-import type { Invoice, Cheque } from "@/types";
+import type { Invoice } from "@/types";
 
 const quickLinks = [
-  { href: "/dashboard/invoices/new", label: "New Invoice",    icon: FileText,      color: "bg-brand-50 text-brand-600"  },
-  { href: "/dashboard/inventory",    label: "View Inventory", icon: Package,       color: "bg-green-50 text-green-600"  },
-  { href: "/dashboard/cheques",      label: "Cheques Due",    icon: CalendarClock, color: "bg-amber-50 text-amber-600"  },
-  { href: "/dashboard/uc-returns",   label: "UC Returns",     icon: RotateCcw,     color: "bg-red-50 text-red-600"      },
+  { href: "/dashboard/invoices/new", label: "New Invoice",    icon: FileText,      color: "bg-brand-50 text-brand-600" },
+  { href: "/dashboard/inventory",    label: "View Inventory", icon: Package,       color: "bg-green-50 text-green-600" },
+  { href: "/dashboard/cheques",      label: "Cheques Due",    icon: CalendarClock, color: "bg-amber-50 text-amber-600" },
+  { href: "/dashboard/uc-returns",   label: "UC Returns",     icon: RotateCcw,     color: "bg-red-50 text-red-600"    },
 ];
 
+const ALERT_LINKS: Record<string, string> = {
+  cheque_due_soon: "/dashboard/cheques",
+  cheque_overdue:  "/dashboard/cheques",
+  low_stock:       "/dashboard/inventory",
+  uc_not_sent:     "/dashboard/uc-returns",
+  ceat_overdue:    "/dashboard/uc-returns",
+};
+
+const ALERT_COLORS: Record<string, string> = {
+  cheque_due_soon: "bg-amber-50 border-amber-200 text-amber-800",
+  cheque_overdue:  "bg-red-50 border-red-200 text-red-800",
+  low_stock:       "bg-amber-50 border-amber-200 text-amber-800",
+  uc_not_sent:     "bg-orange-50 border-orange-200 text-orange-800",
+  ceat_overdue:    "bg-red-50 border-red-200 text-red-800",
+};
+
+function AlertBanner() {
+  const { alerts, loading } = useAlerts();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [running, setRunning]   = useState(false);
+
+  async function runNow() {
+    setRunning(true);
+    await fetch("/api/run-alerts");
+    setRunning(false);
+  }
+
+  if (loading || alerts.length === 0) return null;
+
+  return (
+    <div className="mb-5 space-y-2">
+      {alerts.map(alert => (
+        <div key={alert.type} className={`rounded-xl border px-4 py-3 ${ALERT_COLORS[alert.type] ?? "bg-gray-50 border-gray-200 text-gray-800"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span className="text-sm font-medium">
+                {alert.count} × {alert.message}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href={ALERT_LINKS[alert.type] ?? "/dashboard"} className="text-xs underline underline-offset-2">
+                View
+              </Link>
+              <button onClick={() => setExpanded(expanded === alert.type ? null : alert.type)}>
+                {expanded === alert.type
+                  ? <ChevronUp className="h-4 w-4" />
+                  : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          {expanded === alert.type && (
+            <ul className="mt-2 ml-6 space-y-0.5">
+              {alert.items.map((item, i) => (
+                <li key={i} className="text-xs opacity-90">• {item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+
+      <div className="flex justify-end">
+        <button
+          onClick={runNow}
+          disabled={running}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <RefreshCw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
+          {running ? "Checking..." : "Refresh alerts"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
-  const { appUser } = useAuth();
+  const { appUser }    = useAuth();
   const { lowStockItems } = useStock();
-  const [todaySales, setTodaySales]       = useState(0);
-  const [dueCheques, setDueCheques]       = useState(0);
+
+  const [todaySales, setTodaySales]         = useState(0);
+  const [dueCheques, setDueCheques]         = useState(0);
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading]             = useState(true);
+  const [statsLoading, setStatsLoading]     = useState(true);
 
   useEffect(() => {
     async function loadStats() {
       try {
-        // Today's invoices
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
+
         const invSnap = await getDocs(
           query(
             collection(db, "invoices"),
@@ -41,10 +124,9 @@ export default function DashboardPage() {
           )
         );
         const invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
-        setTodaySales(invoices.reduce((sum, inv) => sum + inv.totalAmount, 0));
+        setTodaySales(invoices.reduce((s, i) => s + i.totalAmount, 0));
         setRecentInvoices(invoices.slice(0, 5));
 
-        // Cheques due within 3 days
         const in3days = new Date();
         in3days.setDate(in3days.getDate() + 3);
         const cheqSnap = await getDocs(
@@ -55,22 +137,18 @@ export default function DashboardPage() {
           )
         );
         setDueCheques(cheqSnap.size);
-      } catch (e) {
-        // silently handle — Firestore index may not exist yet
-      } finally {
-        setLoading(false);
-      }
+      } catch {}
+      finally { setStatsLoading(false); }
     }
     loadStats();
   }, []);
 
-  const hour = new Date().getHours();
+  const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
+      <div className="mb-5">
         <h1 className="text-xl font-medium text-gray-900">
           {greeting}, {appUser?.displayName?.split(" ")[0] ?? "there"} 👋
         </h1>
@@ -79,25 +157,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Alert banners */}
-      {dueCheques > 0 && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-          <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-800">
-            <span className="font-medium">{dueCheques} cheque{dueCheques > 1 ? "s" : ""}</span> due within 3 days —{" "}
-            <Link href="/dashboard/cheques" className="underline underline-offset-2">view now</Link>
-          </p>
-        </div>
-      )}
-      {lowStockItems.length > 0 && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-          <Package className="h-4 w-4 text-amber-600 flex-shrink-0" />
-          <p className="text-sm text-amber-800">
-            <span className="font-medium">{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""}</span> low on stock —{" "}
-            <Link href="/dashboard/inventory" className="underline underline-offset-2">check inventory</Link>
-          </p>
-        </div>
-      )}
+      {/* Live alert banners */}
+      <AlertBanner />
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -108,7 +169,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-xs text-gray-500">Today's sales</p>
             <p className="text-lg font-medium text-gray-900">
-              {loading ? "—" : formatLKR(todaySales)}
+              {statsLoading ? "—" : formatLKR(todaySales)}
             </p>
           </div>
         </Card>
@@ -119,7 +180,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-xs text-gray-500">Cheques due (3d)</p>
             <p className="text-lg font-medium text-gray-900">
-              {loading ? "—" : dueCheques}
+              {statsLoading ? "—" : dueCheques}
             </p>
           </div>
         </Card>
@@ -149,13 +210,17 @@ export default function DashboardPage() {
           </div>
           <Card padding={false}>
             {recentInvoices.map((inv, i) => (
-              <div key={inv.id} className={`flex items-center justify-between px-4 py-3 ${i < recentInvoices.length - 1 ? "border-b border-gray-50" : ""}`}>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{inv.shopName}</p>
-                  <p className="text-xs text-gray-400">{inv.invoiceNo} · {inv.paymentType === "cash" ? "Cash" : inv.paymentType.replace("cheque_", "Cheque ").replace("d", " days")}</p>
+              <Link key={inv.id} href={`/dashboard/invoices/${inv.id}`}>
+                <div className={`flex items-center justify-between px-4 py-3 hover:bg-gray-50 cursor-pointer ${i < recentInvoices.length - 1 ? "border-b border-gray-50" : ""}`}>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{inv.shopName}</p>
+                    <p className="text-xs text-gray-400">
+                      {inv.invoiceNo} · {inv.paymentType === "cash" ? "Cash" : inv.paymentType.replace("cheque_", "Cheque ").replace("d", " days")}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{formatLKR(inv.totalAmount)}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-900">{formatLKR(inv.totalAmount)}</span>
-              </div>
+              </Link>
             ))}
           </Card>
         </>

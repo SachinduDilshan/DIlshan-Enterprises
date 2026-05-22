@@ -5,27 +5,32 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, FileText, CalendarClock, Package,
   RotateCcw, Truck, Settings, LogOut, Store,
-  Book,
+  BarChart3,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { useAlerts } from "@/hooks/useAlerts";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "/dashboard",             label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/dashboard/shops",       label: "Shops",      icon: Store           },
-  { href: "/dashboard/invoices",    label: "Invoices",   icon: FileText       },
-  { href: "/dashboard/cheques",     label: "Cheques",    icon: CalendarClock   },
-  { href: "/dashboard/inventory",   label: "Inventory",  icon: Package         },
-  { href: "/dashboard/uc-returns",  label: "UC Returns", icon: RotateCcw       },
-  { href: "/dashboard/dispatch",    label: "Dispatch",   icon: Truck           },
-  { href: "/dashboard/reports",     label: "Reports",    icon: Book    },
+const NAV_ALL = [
+  { href: "/dashboard",             label: "Dashboard",  icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
+  { href: "/dashboard/shops",       label: "Shops",      icon: Store,           roles: ["admin","sales_rep"]          },
+  { href: "/dashboard/invoices",    label: "Invoices",   icon: FileText,        roles: ["admin","sales_rep"]          },
+  { href: "/dashboard/cheques",     label: "Cheques",    icon: CalendarClock,   roles: ["admin","sales_rep"]          },
+  { href: "/dashboard/inventory",   label: "Inventory",  icon: Package,         roles: ["admin","sales_rep"]          },
+  { href: "/dashboard/uc-returns",  label: "UC Returns", icon: RotateCcw,       roles: ["admin","sales_rep"]          },
+  { href: "/dashboard/dispatch",    label: "Dispatch",   icon: Truck,           roles: ["admin","sales_rep","driver"] },
+  { href: "/dashboard/reports",     label: "Reports",    icon: BarChart3,       roles: ["admin"]                     },
 ];
 
 export function Sidebar() {
-  const pathname    = usePathname();
-  const { appUser } = useAuth();
+  const pathname      = usePathname();
+  const { appUser }   = useAuth();
+  const { totalCount } = useAlerts();
+  const role          = appUser?.role ?? "sales_rep";
+
+  const navItems = NAV_ALL.filter(item => item.roles.includes(role));
 
   async function handleSignOut() {
     await signOut(auth);
@@ -44,6 +49,7 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
+          const showBadge = href === "/dashboard" && totalCount > 0;
           return (
             <Link
               key={href}
@@ -53,8 +59,13 @@ export function Sidebar() {
                 active ? "bg-brand-50 text-brand-800" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               )}
             >
-              <Icon className={cn("h-4 w-4", active ? "text-brand-600" : "text-gray-400")} />
-              {label}
+              <Icon className={cn("h-4 w-4 flex-shrink-0", active ? "text-brand-600" : "text-gray-400")} />
+              <span className="flex-1">{label}</span>
+              {showBadge && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                  {totalCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -62,10 +73,20 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="border-t border-gray-100 px-3 py-4 space-y-0.5">
-        <Link href="/dashboard/settings" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-          <Settings className="h-4 w-4 text-gray-400" />
-          Settings
-        </Link>
+        {role === "admin" && (
+          <Link
+            href="/dashboard/settings"
+            className={cn(
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              pathname.startsWith("/dashboard/settings")
+                ? "bg-brand-50 text-brand-800"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <Settings className="h-4 w-4 text-gray-400" />
+            Settings
+          </Link>
+        )}
         <div className="flex items-center gap-3 px-3 py-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800 flex-shrink-0">
             {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}

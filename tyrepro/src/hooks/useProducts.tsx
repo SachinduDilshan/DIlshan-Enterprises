@@ -12,10 +12,12 @@ export function useProducts() {
   useEffect(() => {
     const q = query(productsCol, where("active", "==", true), orderBy("name"));
     const unsub = onSnapshot(q, (snap) => {
-      setProducts(snap.docs.map((d) => {
-        const { id: _id, ...data } = d.data() as Product;
-        return { id: d.id, ...data } as Product;
-      }));
+      setProducts(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return ({ id: d.id, ...(data as Omit<Product, "id">) } as Product);
+        })
+      );
       setLoading(false);
     });
     return unsub;

@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isSalesRep() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'sales_rep'];
+    }
+
+    // Users
+    match /users/{uid} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Shops
+    match /shops/{id} {
+      allow read: if isAuth();
+      allow create, update: if isSalesRep();
+      allow delete: if isAdmin();
+    }
+
+    // Products
+    match /products/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Stock — read only from client; writes via transactions
+    match /stock/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    // Invoices
+    match /invoices/{id} {
+      allow read: if isAuth();
+      allow create: if isSalesRep();
+      allow update: if isAdmin();
+      match /items/{itemId} {
+        allow read: if isAuth();
+        allow write: if isSalesRep();
+      }
+    }
+
+    // Cheques
+    match /cheques/{id} {
+      allow read: if isAuth();
+      allow write: if isSalesRep();
+    }
+
+    // UC Returns
+    match /ucReturns/{id} {
+      allow read: if isAuth();
+      allow create: if isSalesRep();
+      allow update: if isSalesRep();
+    }
+
+    // Stock transfers
+    match /stockTransfers/{id} {
+      allow read: if isAuth();
+      allow write: if isSalesRep();
+    }
+
+    // Dispatches
+    match /dispatches/{id} {
+      allow read: if isAuth();
+      allow create, update: if isSalesRep();
+      match /stops/{stopId} {
+        allow read: if isAuth();
+        allow write: if isAuth();
+      }
+    }
+
+    // Warehouses
+    match /warehouses/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Counters
+    match /counters/{id} {
+      allow read, write: if isAuth();
+    }
+
+    // System alerts
+    match /systemAlerts/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Alert settings per user
+    match /alertSettings/{uid} {
+      allow read, write: if isAuth() && request.auth.uid == uid;
+    }
+  }
+}

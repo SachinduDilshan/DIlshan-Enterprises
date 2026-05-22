@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { BarChart3, FileText, Package, RotateCcw, CalendarClock } from "lucide-react";
 import DailySalesReport from "@/components/reports/DailySalesReport";
 import ChequesReport from "@/components/reports/ChequesReport";
-import StockMovementReport from "@/components/reports/Stockmovementreport";
+import StockMovementReport from "@/components/reports/StockMovementReport";
 import UCReturnsReport from "@/components/reports/UCReturnsReport";
 import ShopSalesReport from "@/components/reports/ShopSalesReport";
 
