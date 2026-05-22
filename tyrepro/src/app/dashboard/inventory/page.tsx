@@ -124,13 +124,14 @@ function ProductModal({
       } else {
         await addDoc(productsCol, {
           sku,
-          name:      finalName,
-          brand:     finalBrand,
+          name: finalName,
+          brand: finalBrand,
           type,
           size,
           unitPrice,
-          active:    true,
+          active: true,
           createdAt: serverTimestamp(),
+          id: ""
         });
       }
       onClose();
@@ -366,17 +367,18 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
     setSub(true); setError("");
     try {
       await addDoc(transfersCol, {
-        fromWarehouseId:   fromWh,
+        fromWarehouseId: fromWh,
         fromWarehouseName: WAREHOUSES.find(w => w.value === fromWh)?.label ?? fromWh,
-        toWarehouseId:     toWh,
-        toWarehouseName:   WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
-        productId:         selectedStock.productId,
-        productName:       selectedStock.productName,
-        productSku:        selectedStock.productSku,
+        toWarehouseId: toWh,
+        toWarehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
+        productId: selectedStock.productId,
+        productName: selectedStock.productName,
+        productSku: selectedStock.productSku,
         qty, status: "completed",
-        createdBy:  appUser?.uid ?? "",
-        transferDate:  serverTimestamp(),
-        completedAt:   serverTimestamp(),
+        createdBy: appUser?.uid ?? "",
+        transferDate: serverTimestamp(),
+        completedAt: serverTimestamp(),
+        id: ""
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
       const toDocId   = `${toWh}_${selectedStock.productId}`;
@@ -456,7 +458,7 @@ export default function InventoryPage() {
   useEffect(() => {
     const q = query(productsCol, orderBy("name"));
     const unsub = onSnapshot(q, snap => {
-      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+      setProducts(snap.docs.map(d => ({ ...d.data(), id: d.id } as Product)));
       setProdLoad(false);
     });
     return unsub;
