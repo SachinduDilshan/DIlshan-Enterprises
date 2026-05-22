@@ -8,36 +8,29 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
-import { AlertTriangle, ArrowLeftRight, Package, Plus, Pencil, X, Check } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Package, Plus, Pencil, X, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Stock, Product, TyreType } from "@/types";
 import {
   addDoc, serverTimestamp, doc, updateDoc,
   runTransaction, collection, query, orderBy,
-  onSnapshot, increment, setDoc,
+  onSnapshot, increment, setDoc, deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
-
-// ── Constants ─────────────────────────────────────────────
 
 const WAREHOUSES = [
   { value: "",             label: "All warehouses" },
   { value: "kurunegala",   label: "Kurunegala"     },
   { value: "anuradhapura", label: "Anuradhapura"   },
 ];
-
-const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Other"];
+const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other"];
 
 // ── Stock bar ─────────────────────────────────────────────
 
 function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) {
-  const pct   = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
-  const color =
-    qty <= 0              ? "bg-gray-200"
-    : qty <= reorderLevel ? "bg-red-500"
-    : qty <= reorderLevel * 2 ? "bg-amber-400"
-    : "bg-green-500";
+  const pct = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
+  const color = qty <= 0 ? "bg-gray-200" : qty <= reorderLevel ? "bg-red-500" : qty <= reorderLevel * 2 ? "bg-amber-400" : "bg-green-500";
   return (
     <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100">
       <div className={cn("h-1.5 rounded-full transition-all", color)} style={{ width: `${Math.max(pct, 4)}%` }} />
@@ -53,7 +46,7 @@ function StockRow({ item }: { item: Stock }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-          {isOut  && <Badge variant="danger">Out of stock</Badge>}
+          {isOut && <Badge variant="danger">Out of stock</Badge>}
           {!isOut && isLow && <Badge variant="warning">Low</Badge>}
         </div>
         <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
@@ -67,184 +60,153 @@ function StockRow({ item }: { item: Stock }) {
   );
 }
 
-// ── Add / Edit product modal ──────────────────────────────
+// ── Delete confirmation modal ─────────────────────────────
 
-function ProductModal({
-  existing,
-  onClose,
-}: {
-  existing?: Product;
-  onClose: () => void;
+function DeleteConfirmModal({ product, onConfirm, onCancel }: {
+  product:   Product;
+  onConfirm: () => void;
+  onCancel:  () => void;
 }) {
-  const { appUser } = useAuth();
-  const [name, setName]           = useState(existing?.name ?? "");
-  const [brand, setBrand]         = useState(existing?.brand ?? "MRF");
-  const [customBrand, setCustom]  = useState("");
-  const [size, setSize]           = useState(existing?.size ?? "");
-  const [type, setType]           = useState<TyreType>(existing?.type ?? "bike");
-  const [tubeType, setTubeType]   = useState<"tube_type" | "tubeless">("tube_type");
-  const [unitPrice, setPrice]     = useState(existing?.unitPrice ?? 0);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <Card className="w-full max-w-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 flex-shrink-0">
+            <Trash2 className="h-5 w-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-medium text-gray-900">Delete product?</h3>
+            <p className="text-xs text-gray-500">This cannot be undone</p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-3 py-2.5 mb-4">
+          <p className="text-sm font-medium text-gray-900">{product.name}</p>
+          <p className="text-xs text-gray-500">{product.sku}</p>
+        </div>
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-4 text-xs text-amber-800">
+          ⚠ Deleting will remove this product from the catalogue. Existing invoices and stock records will not be affected.
+        </div>
+        <div className="flex gap-3">
+          <Button variant="secondary" className="flex-1" onClick={onCancel} type="button">Cancel</Button>
+          <Button variant="danger" className="flex-1" loading={deleting}
+            onClick={async () => { setDeleting(true); await onConfirm(); }}>
+            Delete
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
-  // Auto-generate SKU
-  function buildSku() {
-    const b = brand === "Other" ? customBrand : brand;
-    const t = type === "bike" ? "BK" : "3W";
-    const tube = tubeType === "tubeless" ? "TL" : "TT";
-    return `${size.replace(/[^0-9.]/g, "")}-${b.toUpperCase().slice(0, 4)}-${t}-${tube}`.replace(/\s/g, "");
-  }
+// ── Add/Edit product modal ────────────────────────────────
 
-  // Auto-generate display name
+function ProductModal({ existing, onClose }: { existing?: Product; onClose: () => void }) {
+  const [name, setName]         = useState(existing?.name ?? "");
+  const [brand, setBrand]       = useState(existing?.brand ?? "MRF");
+  const [customBrand, setCustom] = useState("");
+  const [size, setSize]         = useState(existing?.size ?? "");
+  const [type, setType]         = useState<TyreType>(existing?.type ?? "bike");
+  const [tubeType, setTubeType] = useState<"tube_type" | "tubeless">("tube_type");
+  const [unitPrice, setPrice]   = useState(existing?.unitPrice ?? 0);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+
   function buildName() {
-    const b = brand === "Other" ? customBrand : brand;
+    const b    = brand === "Other" ? customBrand : brand;
     const tube = tubeType === "tubeless" ? "Tubeless" : "Tube Type";
     return `${size} ${b} ${tube}`.trim();
+  }
+  function buildSku() {
+    const b    = brand === "Other" ? customBrand : brand;
+    const t    = type === "bike" ? "BK" : "3W";
+    const tube = tubeType === "tubeless" ? "TL" : "TT";
+    return `${size.replace(/[^0-9./]/g, "")}-${b.toUpperCase().slice(0, 4)}-${t}-${tube}`.replace(/\s/g, "");
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     const finalBrand = brand === "Other" ? customBrand : brand;
-    if (!size || !finalBrand || unitPrice <= 0) {
-      setError("Size, brand, and price are required.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-
+    if (!size || !finalBrand || unitPrice <= 0) { setError("Size, brand and price are required."); return; }
+    setSaving(true); setError("");
     const finalName = name || buildName();
-    const sku       = existing?.sku ?? buildSku();
-
+    const sku = existing?.sku ?? buildSku();
     try {
       if (existing) {
-        await updateDoc(doc(productsCol, existing.id), {
-          name: finalName, brand: finalBrand, size,
-          type, unitPrice, updatedAt: serverTimestamp(),
-        });
+        await updateDoc(doc(productsCol, existing.id), { name: finalName, brand: finalBrand, size, type, unitPrice, updatedAt: serverTimestamp() });
       } else {
         await addDoc(productsCol, {
-          sku,
-          name: finalName,
-          brand: finalBrand,
-          type,
-          size,
-          unitPrice,
-          active: true,
-          createdAt: serverTimestamp(),
+          sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp(),
           id: ""
         });
       }
       onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setSaving(false); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader
-          title={existing ? "Edit product" : "Add new product"}
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
-        />
+        <CardHeader title={existing ? "Edit product" : "Add new product"}
+          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>} />
         <form onSubmit={handleSave} className="space-y-3">
-          {/* Tyre type */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
             <div className="flex gap-2">
               {(["bike", "three_wheeler"] as TyreType[]).map(t => (
                 <button key={t} type="button" onClick={() => setType(t)}
                   className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                    type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600"
-                  )}>
+                    type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
                   {t === "bike" ? "🏍 Bike" : "🛺 Three-wheeler"}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Tube type */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tube type *</label>
             <div className="flex gap-2">
               {(["tube_type", "tubeless"] as const).map(t => (
                 <button key={t} type="button" onClick={() => setTubeType(t)}
                   className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                    tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600"
-                  )}>
+                    tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
                   {t === "tube_type" ? "Tube type" : "Tubeless"}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Brand */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">Brand *</label>
             <div className="flex flex-wrap gap-2">
               {BRANDS.map(b => (
                 <button key={b} type="button" onClick={() => setBrand(b)}
                   className={cn("rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
-                    brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600"
-                  )}>
+                    brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
                   {b}
                 </button>
               ))}
             </div>
             {brand === "Other" && (
-              <input value={customBrand} onChange={e => setCustom(e.target.value)}
-                placeholder="Enter brand name"
+              <input value={customBrand} onChange={e => setCustom(e.target.value)} placeholder="Enter brand name"
                 className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
             )}
           </div>
-
-          {/* Size */}
-          <Input
-            label="Tyre size *"
-            placeholder={type === "bike" ? "e.g. 2.75-17 or 90/90-17" : "e.g. 400-8"}
-            value={size}
-            onChange={e => setSize(e.target.value)}
-          />
-
-          {/* Display name — auto or custom */}
+          <Input label="Tyre size *" placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"} value={size} onChange={e => setSize(e.target.value)} />
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Display name <span className="text-gray-400 font-normal">(auto-filled, you can edit)</span>
-            </label>
-            <input
-              value={name || buildName()}
-              onChange={e => setName(e.target.value)}
-              placeholder={buildName() || "e.g. 2.75-17 MRF Tube Type"}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
-            />
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Display name <span className="text-gray-400 font-normal">(auto-filled)</span></label>
+            <input value={name || buildName()} onChange={e => setName(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
           </div>
-
-          {/* Price */}
-          <Input
-            label="Unit price (Rs) *"
-            type="number"
-            min={1}
-            value={unitPrice || ""}
-            onChange={e => setPrice(parseFloat(e.target.value) || 0)}
-            placeholder="e.g. 2800"
-          />
-
-          {/* SKU preview */}
+          <Input label="Unit price (Rs) *" type="number" min={1} value={unitPrice || ""} onChange={e => setPrice(parseFloat(e.target.value) || 0)} placeholder="e.g. 2800" />
           {!existing && (
             <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              SKU will be: <span className="font-mono font-medium text-gray-700">{buildSku()}</span>
+              SKU: <span className="font-mono font-medium text-gray-700">{buildSku()}</span>
             </div>
           )}
-
           {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" type="submit" loading={saving}>
-              {existing ? "Save changes" : "Add product"}
-            </Button>
+            <Button className="flex-1" type="submit" loading={saving}>{existing ? "Save changes" : "Add product"}</Button>
           </div>
         </form>
       </Card>
@@ -254,21 +216,13 @@ function ProductModal({
 
 // ── Add stock modal ───────────────────────────────────────
 
-function AddStockModal({
-  products,
-  onClose,
-}: {
-  products: Product[];
-  onClose: () => void;
-}) {
-  const { appUser } = useAuth();
+function AddStockModal({ products, onClose }: { products: Product[]; onClose: () => void }) {
   const [productId, setProductId] = useState("");
   const [warehouseId, setWh]      = useState("anuradhapura");
   const [qty, setQty]             = useState(0);
   const [reorder, setReorder]     = useState(10);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
-
   const selectedProduct = products.find(p => p.id === productId);
 
   async function handleSave(e: React.FormEvent) {
@@ -278,62 +232,30 @@ function AddStockModal({
     try {
       const stockDocId = `${warehouseId}_${productId}`;
       const wh = WAREHOUSES.find(w => w.value === warehouseId)!;
-      // Use setDoc with merge — creates if missing, adds qty if exists
       await setDoc(doc(stockCol, stockDocId), {
-        id:            stockDocId,
-        warehouseId,
-        warehouseName: wh.label,
-        productId,
-        productName:   selectedProduct?.name ?? "",
-        productSku:    selectedProduct?.sku ?? "",
-        productType:   selectedProduct?.type ?? "bike",
-        qty:           increment(qty),
-        reorderLevel:  reorder,
-        updatedAt:     serverTimestamp(),
+        id: stockDocId, warehouseId, warehouseName: wh.label,
+        productId, productName: selectedProduct?.name ?? "",
+        productSku: selectedProduct?.sku ?? "",
+        productType: selectedProduct?.type ?? "bike",
+        qty: increment(qty), reorderLevel: reorder,
+        updatedAt: serverTimestamp(),
       }, { merge: true });
       onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setSaving(false); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-sm rounded-t-3xl md:rounded-2xl">
-        <CardHeader
-          title="Add stock"
-          subtitle="Add inventory to a warehouse"
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
-        />
+        <CardHeader title="Add stock" subtitle="Add inventory to a warehouse"
+          action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
         <form onSubmit={handleSave} className="space-y-3">
-          <Select
-            label="Product *"
-            value={productId}
-            onChange={e => setProductId(e.target.value)}
-            placeholder="Select product..."
-            options={products.map(p => ({ value: p.id, label: p.name }))}
-          />
-          <Select
-            label="Warehouse *"
-            value={warehouseId}
-            onChange={e => setWh(e.target.value)}
-            options={WAREHOUSES.slice(1)}
-          />
-          <Input
-            label="Quantity to add *"
-            type="number" min={1}
-            value={qty || ""}
-            onChange={e => setQty(parseInt(e.target.value) || 0)}
-            placeholder="e.g. 50"
-          />
-          <Input
-            label="Reorder level (alert when below this)"
-            type="number" min={1}
-            value={reorder}
-            onChange={e => setReorder(parseInt(e.target.value) || 10)}
-          />
+          <Select label="Product *" value={productId} onChange={e => setProductId(e.target.value)}
+            placeholder="Select product..." options={products.map(p => ({ value: p.id, label: p.name }))} />
+          <Select label="Warehouse *" value={warehouseId} onChange={e => setWh(e.target.value)} options={WAREHOUSES.slice(1)} />
+          <Input label="Quantity to add *" type="number" min={1} value={qty || ""} onChange={e => setQty(parseInt(e.target.value) || 0)} placeholder="e.g. 50" />
+          <Input label="Reorder level (alert below this)" type="number" min={1} value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
           {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
@@ -349,14 +271,15 @@ function AddStockModal({
 
 function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void }) {
   const { appUser } = useAuth();
-  const [fromWh, setFromWh]   = useState("kurunegala");
-  const [toWh, setToWh]       = useState("anuradhapura");
+  const [fromWh, setFromWh]     = useState("kurunegala");
+  const [toWh, setToWh]         = useState("anuradhapura");
   const [productId, setProduct] = useState("");
   const [qty, setQty]           = useState(1);
   const [submitting, setSub]    = useState(false);
   const [error, setError]       = useState("");
 
-  const fromStock     = stock.filter(s => s.warehouseId === fromWh);
+  // Only show products that exist in the FROM warehouse
+  const fromStock = stock.filter(s => s.warehouseId === fromWh);
   const selectedStock = fromStock.find(s => s.productId === productId);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -367,63 +290,42 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
     setSub(true); setError("");
     try {
       await addDoc(transfersCol, {
-        fromWarehouseId: fromWh,
-        fromWarehouseName: WAREHOUSES.find(w => w.value === fromWh)?.label ?? fromWh,
-        toWarehouseId: toWh,
-        toWarehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
-        productId: selectedStock.productId,
-        productName: selectedStock.productName,
-        productSku: selectedStock.productSku,
-        qty, status: "completed",
-        createdBy: appUser?.uid ?? "",
-        transferDate: serverTimestamp(),
-        completedAt: serverTimestamp(),
+        fromWarehouseId: fromWh, fromWarehouseName: WAREHOUSES.find(w => w.value === fromWh)?.label ?? fromWh,
+        toWarehouseId: toWh, toWarehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
+        productId: selectedStock.productId, productName: selectedStock.productName,
+        productSku: selectedStock.productSku, qty, status: "completed",
+        createdBy: appUser?.uid ?? "", transferDate: serverTimestamp(), completedAt: serverTimestamp(),
         id: ""
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
       const toDocId   = `${toWh}_${selectedStock.productId}`;
       await runTransaction(db, async tx => {
-        const fromRef  = doc(stockCol, fromDocId);
-        const toRef    = doc(stockCol, toDocId);
-        const fromSnap = await tx.get(fromRef);
-        const toSnap   = await tx.get(toRef);
+        const fromRef = doc(stockCol, fromDocId), toRef = doc(stockCol, toDocId);
+        const fromSnap = await tx.get(fromRef), toSnap = await tx.get(toRef);
         if (!fromSnap.exists()) throw new Error("Source stock not found.");
         const fromQty = (fromSnap.data() as Stock).qty;
         if (fromQty < qty) throw new Error("Insufficient stock.");
         tx.update(fromRef, { qty: fromQty - qty, updatedAt: serverTimestamp() });
-        if (toSnap.exists()) {
-          tx.update(toRef, { qty: (toSnap.data() as Stock).qty + qty, updatedAt: serverTimestamp() });
-        } else {
-          tx.set(toRef, {
-            ...fromSnap.data(),
-            id: toDocId, warehouseId: toWh,
-            warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
-            qty, updatedAt: serverTimestamp(),
-          });
-        }
+        if (toSnap.exists()) tx.update(toRef, { qty: (toSnap.data() as Stock).qty + qty, updatedAt: serverTimestamp() });
+        else tx.set(toRef, { ...fromSnap.data(), id: toDocId, warehouseId: toWh, warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh, qty, updatedAt: serverTimestamp() });
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSub(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setSub(false); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl">
         <CardHeader title="Stock transfer" subtitle="Move stock between warehouses"
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
-        />
+          action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
         <form onSubmit={handleSubmit} className="space-y-3">
           <Select label="From warehouse" value={fromWh} onChange={e => { setFromWh(e.target.value); setProduct(""); }} options={WAREHOUSES.slice(1)} />
           <Select label="To warehouse"   value={toWh}   onChange={e => setToWh(e.target.value)}   options={WAREHOUSES.slice(1)} />
-          <Select label="Product" value={productId} onChange={e => setProduct(e.target.value)} placeholder="Select product..."
+          <Select label="Product (from warehouse stock only)" value={productId} onChange={e => setProduct(e.target.value)} placeholder="Select product..."
             options={fromStock.map(s => ({ value: s.productId, label: `${s.productName} (${s.qty} available)` }))} />
           <Input label="Quantity" type="number" min={1} max={selectedStock?.qty} value={qty}
-            onChange={e => setQty(Number(e.target.value))}
-            hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
+            onChange={e => setQty(Number(e.target.value))} hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
           {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" className="flex-1" onClick={onClose} type="button">Cancel</Button>
@@ -435,34 +337,38 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   );
 }
 
-// ── Main inventory page ───────────────────────────────────
+// ── Main page ─────────────────────────────────────────────
 
 type InventoryTab = "stock" | "products";
 
 export default function InventoryPage() {
-  const [activeTab, setActiveTab]     = useState<InventoryTab>("stock");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [search, setSearch]           = useState("");
-  const [tyreTab, setTyreTab]         = useState<"all" | "bike" | "three_wheeler">("all");
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [showAddStock, setShowAddStock] = useState(false);
+  const [activeTab, setActiveTab]           = useState<InventoryTab>("stock");
+  const [warehouseId, setWarehouseId]       = useState("");
+  const [search, setSearch]                 = useState("");
+  const [tyreTab, setTyreTab]               = useState<"all" | "bike" | "three_wheeler">("all");
+  const [showTransfer, setShowTransfer]     = useState(false);
+  const [showAddStock, setShowAddStock]     = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | undefined>();
+  const [editProduct, setEditProduct]       = useState<Product | undefined>();
+  const [deleteProduct, setDeleteProduct]   = useState<Product | undefined>();
 
-  const { stock, lowStockItems, loading: stockLoading, error: stockError } = useStock({ warehouseId: warehouseId || undefined });
+  const { stock, lowStockItems, loading: stockLoading } = useStock({ warehouseId: warehouseId || undefined });
 
-  // Load all products (including inactive for management view)
   const [products, setProducts]   = useState<Product[]>([]);
   const [prodLoading, setProdLoad] = useState(true);
 
   useEffect(() => {
     const q = query(productsCol, orderBy("name"));
-    const unsub = onSnapshot(q, snap => {
-      setProducts(snap.docs.map(d => ({ ...d.data(), id: d.id } as Product)));
+    return onSnapshot(q, snap => {
+      setProducts(snap.docs.map(d => ({ ...(d.data() as Omit<Product, "id">), id: d.id } as Product)));
       setProdLoad(false);
     });
-    return unsub;
   }, []);
+
+  async function handleDeleteProduct(p: Product) {
+    await deleteDoc(doc(productsCol, p.id));
+    setDeleteProduct(undefined);
+  }
 
   async function toggleProductActive(p: Product) {
     await updateDoc(doc(productsCol, p.id), { active: !p.active, updatedAt: serverTimestamp() });
@@ -480,32 +386,25 @@ export default function InventoryPage() {
   }, {});
 
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-medium text-gray-900">Inventory</h1>
-          <p className="text-sm text-gray-500">{stock.length} SKUs · {products.length} products</p>
+          <p className="text-sm text-gray-500">{stock.length} SKUs · {products.filter(p=>p.active).length} products</p>
         </div>
         <div className="flex gap-2">
           {activeTab === "stock" && (
             <>
-              <Button size="sm" variant="secondary" onClick={() => setShowAddStock(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" /> Add stock
-              </Button>
-              <Button size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
-                <ArrowLeftRight className="h-4 w-4" /> Transfer
-              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setShowAddStock(true)} className="gap-1.5"><Plus className="h-4 w-4" />Add stock</Button>
+              <Button size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5"><ArrowLeftRight className="h-4 w-4" />Transfer</Button>
             </>
           )}
           {activeTab === "products" && (
-            <Button size="sm" onClick={() => setShowAddProduct(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" /> Add product
-            </Button>
+            <Button size="sm" onClick={() => setShowAddProduct(true)} className="gap-1.5"><Plus className="h-4 w-4" />Add product</Button>
           )}
         </div>
       </div>
@@ -514,24 +413,20 @@ export default function InventoryPage() {
       <div className="mb-4 flex rounded-xl border border-gray-200 overflow-hidden">
         {(["stock", "products"] as InventoryTab[]).map(t => (
           <button key={t} onClick={() => { setActiveTab(t); setSearch(""); }}
-            className={cn("flex-1 py-2.5 text-sm font-medium capitalize transition-colors",
-              activeTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
-            )}>
+            className={cn("flex-1 py-2.5 text-sm font-medium transition-colors",
+              activeTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
             {t === "stock" ? "Stock levels" : "Product catalogue"}
           </button>
         ))}
       </div>
 
-      {/* Search */}
       <div className="mb-4">
-        <Input placeholder={activeTab === "stock" ? "Search by name or SKU..." : "Search products..."}
-          value={search} onChange={e => setSearch(e.target.value)} />
+        <Input placeholder={activeTab === "stock" ? "Search by name or SKU..." : "Search products..."} value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {/* ── STOCK TAB ── */}
       {activeTab === "stock" && (
         <>
-          {/* Low stock alert */}
           {lowStockItems.length > 0 && (
             <div className="mb-4 flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -541,39 +436,30 @@ export default function InventoryPage() {
               </div>
             </div>
           )}
-
-          {/* Warehouse + type filter */}
           <div className="mb-4 flex gap-2">
             <Select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} options={WAREHOUSES} className="flex-1" />
             <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden text-sm">
               {(["all", "bike", "three_wheeler"] as const).map(t => (
                 <button key={t} onClick={() => setTyreTab(t)}
                   className={cn("px-3 py-2 font-medium transition-colors",
-                    tyreTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
-                  )}>
+                    tyreTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
                   {t === "all" ? "All" : t === "bike" ? "Bike" : "3W"}
                 </button>
               ))}
             </div>
           </div>
-
           {stockLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
-
           {!stockLoading && filteredStock.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">No stock found</p>
-              <p className="text-xs text-gray-400 mt-1">Add products first, then add stock</p>
               <Button size="sm" className="mt-4" onClick={() => setShowAddStock(true)}>Add stock</Button>
             </Card>
           )}
-
           {!stockLoading && (
             warehouseId
               ? <Card padding={false}>
-                  <div className="px-4 py-3 border-b border-gray-50">
-                    <span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span>
-                  </div>
+                  <div className="px-4 py-3 border-b border-gray-50"><span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span></div>
                   <div className="px-4">{filteredStock.map(item => <StockRow key={item.id} item={item} />)}</div>
                 </Card>
               : Object.entries(byWarehouse).map(([whName, items]) => (
@@ -593,7 +479,6 @@ export default function InventoryPage() {
       {activeTab === "products" && (
         <>
           {prodLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
-
           {!prodLoading && filteredProducts.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
@@ -601,32 +486,36 @@ export default function InventoryPage() {
               <Button size="sm" className="mt-4" onClick={() => setShowAddProduct(true)}>Add first product</Button>
             </Card>
           )}
-
           <Card padding={false}>
             {filteredProducts.map((p, i) => (
               <div key={p.id} className={`flex items-center gap-3 px-4 py-3 ${i < filteredProducts.length - 1 ? "border-b border-gray-50" : ""}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                    <Badge variant={p.type === "bike" ? "info" : "default"}>
-                      {p.type === "bike" ? "Bike" : "3-Wheeler"}
-                    </Badge>
+                    <Badge variant={p.type === "bike" ? "info" : "default"}>{p.type === "bike" ? "Bike" : "3-Wheeler"}</Badge>
                     {!p.active && <Badge variant="danger">Inactive</Badge>}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{p.sku} · {p.brand} · Rs {p.unitPrice.toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{p.sku} · {p.brand} · Rs {p.unitPrice?.toLocaleString()}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Edit */}
                   <button onClick={() => setEditProduct(p)}
-                    className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                    className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    title="Edit">
                     <Pencil className="h-3.5 w-3.5 text-gray-500" />
                   </button>
+                  {/* Activate/deactivate */}
                   <button onClick={() => toggleProductActive(p)}
                     className={cn("h-7 w-7 flex items-center justify-center rounded-lg border transition-colors",
-                      p.active ? "border-gray-200 hover:border-red-300 hover:bg-red-50" : "border-green-300 bg-green-50"
-                    )}>
-                    {p.active
-                      ? <X className="h-3.5 w-3.5 text-gray-400" />
-                      : <Check className="h-3.5 w-3.5 text-green-600" />}
+                      p.active ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50" : "border-green-300 bg-green-50")}
+                    title={p.active ? "Deactivate" : "Activate"}>
+                    {p.active ? <X className="h-3.5 w-3.5 text-gray-400" /> : <Check className="h-3.5 w-3.5 text-green-600" />}
+                  </button>
+                  {/* Delete */}
+                  <button onClick={() => setDeleteProduct(p)}
+                    className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+                    title="Delete">
+                    <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
                   </button>
                 </div>
               </div>
@@ -640,6 +529,7 @@ export default function InventoryPage() {
       {showAddStock   && <AddStockModal products={products.filter(p => p.active)} onClose={() => setShowAddStock(false)} />}
       {showAddProduct && <ProductModal onClose={() => setShowAddProduct(false)} />}
       {editProduct    && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
+      {deleteProduct  && <DeleteConfirmModal product={deleteProduct} onConfirm={() => handleDeleteProduct(deleteProduct)} onCancel={() => setDeleteProduct(undefined)} />}
     </div>
   );
 }

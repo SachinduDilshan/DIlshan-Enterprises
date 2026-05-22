@@ -1,20 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
+import {
+  addDoc, serverTimestamp, doc, updateDoc,
+  increment, collection, query, where,
+  getDocs, orderBy, Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ucReturnsCol, stockCol } from "@/lib/firestore-collections";
 import { useAuth } from "@/hooks/useAuth";
 import { useShops } from "@/hooks/useShops";
-import { useProducts } from "@/hooks/useProducts";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, Package } from "lucide-react";
 import Link from "next/link";
-import type { Shop, UCReturnReason } from "@/types";
+import type { Shop, UCReturnReason, Product } from "@/types";
 
 const WAREHOUSES = [
   { value: "kurunegala",   label: "Kurunegala"   },
@@ -29,39 +32,113 @@ const REASONS: { value: UCReturnReason; label: string }[] = [
   { value: "other",                label: "Other"                 },
 ];
 
+// Format a Date to datetime-local input value
+function toDatetimeLocal(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function NewUCReturnPage() {
   const router = useRouter();
   const { appUser } = useAuth();
   const { shops }   = useShops();
-  const { products } = useProducts();
 
-  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
-  const [productId, setProductId]       = useState("");
-  const [warehouseId, setWarehouseId]   = useState("anuradhapura");
-  const [qty, setQty]                   = useState(1);
-  const [reason, setReason]             = useState<UCReturnReason>("sidewall_bulge");
-  const [reasonNotes, setReasonNotes]   = useState("");
-  const [gaveTyre, setGaveTyre]         = useState(true); // almost always true
-  const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState("");
+  const [selectedShop, setSelectedShop]   = useState<Shop | null>(null);
+  const [warehouseId, setWarehouseId]     = useState("anuradhapura");
 
-  const selectedProduct = products.find(p => p.id === productId);
+  // Products sold to this shop from invoice history
+  const [shopProducts, setShopProducts]   = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+
+  const [productId, setProductId]         = useState("");
+  const [productName, setProductName]     = useState("");
+  const [productSku, setProductSku]       = useState("");
+
+  const [qty, setQty]                     = useState(1);
+  const [reason, setReason]               = useState<UCReturnReason>("sidewall_bulge");
+  const [reasonNotes, setReasonNotes]     = useState("");
+  const [gaveTyre, setGaveTyre]           = useState(true);
+
+  // Date/time inputs
+  const [returnReceivedAt, setReturnReceivedAt] = useState(toDatetimeLocal(new Date()));
+  const [gaveTyreAt, setGaveTyreAt]             = useState(toDatetimeLocal(new Date()));
+
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState("");
+
+  // When shop changes, load products sold to that shop from invoice history
+  useEffect(() => {
+    if (!selectedShop) { setShopProducts([]); return; }
+    setProductsLoading(true);
+    setProductId(""); setProductName(""); setProductSku("");
+
+    async function loadShopProducts() {
+      try {
+        // Get all invoice items for this shop
+        const invSnap = await getDocs(
+          query(
+            collection(db, "invoices"),
+            where("shopId", "==", selectedShop!.id),
+            where("status", "==", "confirmed")
+          )
+        );
+
+        const productMap: Record<string, Product> = {};
+        for (const invDoc of invSnap.docs) {
+          const itemsSnap = await getDocs(
+            collection(db, "invoices", invDoc.id, "items")
+          );
+          itemsSnap.docs.forEach(d => {
+            const item = d.data();
+            if (item.productId && !productMap[item.productId]) {
+              productMap[item.productId] = {
+                id:        item.productId,
+                name:      item.productName,
+                sku:       item.productSku,
+                brand:     "",
+                type:      "bike",
+                size:      "",
+                unitPrice: item.unitPrice,
+                active:    true,
+                createdAt: Timestamp.now(),
+              };
+            }
+          });
+        }
+        setShopProducts(Object.values(productMap));
+      } catch (e) {
+        setShopProducts([]);
+      } finally {
+        setProductsLoading(false);
+      }
+    }
+    loadShopProducts();
+  }, [selectedShop?.id]);
+
+  function handleProductChange(pid: string) {
+    setProductId(pid);
+    const found = shopProducts.find(p => p.id === pid);
+    if (found) {
+      setProductName(found.name);
+      setProductSku(found.sku);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedShop || !productId) {
-      setError("Please select a shop and product.");
-      return;
-    }
+    if (!selectedShop)  return setError("Please select a shop.");
+    if (!productId)     return setError("Please select the defective tyre.");
+    if (!productName)   return setError("Product not found — please select again.");
+
     setSaving(true);
     setError("");
 
     try {
-      // If gave new tyre to shop, decrement stock immediately
+      // Decrement stock if gave new tyre
       if (gaveTyre) {
         const stockDocId = `${warehouseId}_${productId}`;
         await updateDoc(doc(stockCol, stockDocId), {
-          qty: increment(-qty),
+          qty:       increment(-qty),
           updatedAt: serverTimestamp(),
         });
       }
@@ -71,21 +148,25 @@ export default function NewUCReturnPage() {
         shopName:             selectedShop.name,
         shopCity:             selectedShop.city,
         productId,
-        productName:          selectedProduct?.name ?? "",
-        productSku:           selectedProduct?.sku ?? "",
+        productName,
+        productSku,
         warehouseId,
         warehouseName:        WAREHOUSES.find(w => w.value === warehouseId)?.label ?? warehouseId,
         qty,
         reason,
-        reasonNotes:          reasonNotes || undefined,
-        status:               "approved",        // only approved returns are logged
+        reasonNotes:          reasonNotes || null,
+        status:               "approved",
         gaveTyreToShop:       gaveTyre,
-        gaveTyreToShopAt:     gaveTyre ? serverTimestamp() : undefined,
-        tyreReceivedFromShop: false,             // not yet collected
+        gaveTyreToShopAt:     gaveTyre
+          ? Timestamp.fromDate(new Date(gaveTyreAt))
+          : null,
+        tyreReceivedFromShop: true,   // we always receive the tyre when logging
+        tyreReceivedAt:       Timestamp.fromDate(new Date(returnReceivedAt)),
+        sentToSupplierAt:     null,
+        replacementReceivedAt: null,
         createdBy:            appUser?.uid ?? "",
         createdAt:            serverTimestamp(),
         updatedAt:            serverTimestamp(),
-        id:                    "",                // will be set to doc ID after creation 
       });
 
       router.push("/dashboard/uc-returns");
@@ -96,7 +177,7 @@ export default function NewUCReturnPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-lg mx-auto">
+    <div className="p-4 md:p-6 max-w-lg mx-auto pb-16">
       <div className="mb-5 flex items-center gap-3">
         <Link href="/dashboard/uc-returns">
           <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
@@ -113,15 +194,18 @@ export default function NewUCReturnPage() {
       <div className="mb-4 flex items-start gap-2 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
         <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
         <p className="text-xs text-blue-800">
-          Only add returns you have already approved. The system will track the full journey
-          from giving a new tyre to the shop, sending to CEAT, and receiving the replacement.
+          Only add returns you have already approved. Products shown are only those
+          previously sold to the selected shop.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Shop + product */}
         <Card>
           <CardHeader title="Return details" />
           <div className="space-y-3">
+
+            {/* Shop */}
             <Select
               label="Shop *"
               value={selectedShop?.id ?? ""}
@@ -129,27 +213,60 @@ export default function NewUCReturnPage() {
               placeholder="Select shop..."
               options={shops.map(s => ({ value: s.id, label: `${s.name} — ${s.city}` }))}
             />
-            <Select
-              label="Defective tyre *"
-              value={productId}
-              onChange={e => setProductId(e.target.value)}
-              placeholder="Select product..."
-              options={products.map(p => ({ value: p.id, label: p.name }))}
-            />
+
+            {/* Defective tyre — only from shop's purchase history */}
+            {selectedShop && (
+              <>
+                {productsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+                    Loading products sold to this shop...
+                  </div>
+                ) : shopProducts.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+                    <Package className="h-4 w-4 flex-shrink-0" />
+                    No invoices found for this shop. Create an invoice first.
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">
+                      Defective tyre * <span className="text-xs font-normal text-gray-400">(products sold to this shop)</span>
+                    </label>
+                    <select
+                      value={productId}
+                      onChange={e => handleProductChange(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    >
+                      <option value="">Select product...</option>
+                      {shopProducts.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Warehouse */}
             <Select
               label="Your warehouse (where new tyre comes from)"
               value={warehouseId}
               onChange={e => setWarehouseId(e.target.value)}
               options={WAREHOUSES}
             />
+
+            {/* Quantity */}
             <div>
-              <label className="text-sm font-medium text-gray-700">Quantity</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Quantity</label>
               <input
                 type="number" min={1} value={qty}
                 onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
               />
             </div>
+
+            {/* Reason */}
             <Select
               label="Reason for return *"
               value={reason}
@@ -165,25 +282,52 @@ export default function NewUCReturnPage() {
           </div>
         </Card>
 
+        {/* Dates & times */}
+        <Card>
+          <CardHeader title="Dates & times" />
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Date & time we received the defective tyre *
+              </label>
+              <input
+                type="datetime-local"
+                value={returnReceivedAt}
+                onChange={e => setReturnReceivedAt(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
+              />
+            </div>
+
+            {gaveTyre && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  Date & time we gave new tyre to shop *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={gaveTyreAt}
+                  onChange={e => setGaveTyreAt(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
+                />
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Did you give a new tyre */}
         <Card>
           <CardHeader title="Did you give a new tyre to the shop instantly?" />
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setGaveTyre(true)}
+            <button type="button" onClick={() => setGaveTyre(true)}
               className={`flex-1 rounded-xl border py-3 text-sm font-medium transition-colors ${
                 gaveTyre ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600"
-              }`}
-            >
+              }`}>
               Yes — gave new tyre
             </button>
-            <button
-              type="button"
-              onClick={() => setGaveTyre(false)}
+            <button type="button" onClick={() => setGaveTyre(false)}
               className={`flex-1 rounded-xl border py-3 text-sm font-medium transition-colors ${
                 !gaveTyre ? "border-red-300 bg-red-50 text-red-800" : "border-gray-200 text-gray-600"
-              }`}
-            >
+              }`}>
               No — not yet
             </button>
           </div>
