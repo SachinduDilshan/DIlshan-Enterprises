@@ -3,27 +3,28 @@
 import { useEffect, useState } from "react";
 import {
   collection, query, where, orderBy, onSnapshot,
-  doc, updateDoc, serverTimestamp, Timestamp,
+  doc, updateDoc, deleteDoc, serverTimestamp, Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { formatLKR, formatDate } from "@/lib/utils";
-import { CalendarClock, CheckCircle, AlertTriangle, Clock } from "lucide-react";
+import { CalendarClock, CheckCircle } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cheque, ChequeStatus } from "@/types";
 
 type TabKey = "due" | "all" | "deposited";
 
 function daysUntil(ts: Timestamp): number {
-  const now  = Date.now();
-  const due  = ts.toDate().getTime();
-  return Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+  return Math.ceil((ts.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 function urgencyBadge(days: number) {
-  if (days < 0)  return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
+  if (days < 0)   return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
   if (days === 0) return <Badge variant="danger">Due today</Badge>;
   if (days <= 2)  return <Badge variant="danger">Due in {days}d</Badge>;
   if (days <= 5)  return <Badge variant="warning">Due in {days}d</Badge>;
@@ -31,28 +32,28 @@ function urgencyBadge(days: number) {
 }
 
 export default function ChequesPage() {
-  const [cheques, setCheques]   = useState<Cheque[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [tab, setTab]           = useState<TabKey>("due");
-  const [depositing, setDepositing] = useState<string | null>(null);
+  const { appUser }                       = useAuth();
+  const [cheques, setCheques]             = useState<Cheque[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [tab, setTab]                     = useState<TabKey>("due");
+  const [depositing, setDepositing]       = useState<string | null>(null);
+  const [toDelete, setToDelete]           = useState<Cheque | null>(null);
+
+  const isAdmin = appUser?.role === "admin";
 
   useEffect(() => {
     const q = tab === "deposited"
       ? query(collection(db, "cheques"), where("status", "==", "deposited"), orderBy("depositedAt", "desc"))
       : query(collection(db, "cheques"), where("status", "==", "pending"), orderBy("dueDate", "asc"));
 
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, snap => {
       setCheques(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque)));
       setLoading(false);
     });
     return unsub;
   }, [tab]);
 
-  const dueSoon = cheques.filter(c => {
-    const d = daysUntil(c.dueDate);
-    return d <= 5;
-  });
-
+  const dueSoon  = cheques.filter(c => daysUntil(c.dueDate) <= 5);
   const displayed = tab === "due" ? dueSoon : cheques;
 
   async function markDeposited(cheque: Cheque) {
@@ -63,17 +64,20 @@ export default function ChequesPage() {
         depositedAt: serverTimestamp(),
         updatedAt:   serverTimestamp(),
       });
-      // Also clear shop outstanding balance
       await updateDoc(doc(db, "shops", cheque.shopId), {
-        outstandingBalance: -cheque.amount, // Should use increment(-amount) but keep simple here
-        updatedAt: serverTimestamp(),
+        outstandingBalance: -cheque.amount,
+        updatedAt:          serverTimestamp(),
       });
     } finally {
       setDepositing(null);
     }
   }
 
-  // Summary stats
+  async function handleDelete(cheque: Cheque) {
+    await deleteDoc(doc(db, "cheques", cheque.id));
+    setToDelete(null);
+  }
+
   const totalPending = cheques.filter(c => c.status === "pending").length;
   const totalValue   = cheques.filter(c => c.status === "pending").reduce((s, c) => s + c.amount, 0);
 
@@ -110,8 +114,8 @@ export default function ChequesPage() {
       <div className="mb-4 flex rounded-xl border border-gray-200 bg-white overflow-hidden">
         {([
           { key: "due",       label: `Due soon (${dueSoon.length})` },
-          { key: "all",       label: "All pending" },
-          { key: "deposited", label: "Deposited"   },
+          { key: "all",       label: "All pending"                  },
+          { key: "deposited", label: "Deposited"                    },
         ] as { key: TabKey; label: string }[]).map(t => (
           <button
             key={t.key}
@@ -144,7 +148,7 @@ export default function ChequesPage() {
 
       <div className="space-y-3">
         {displayed.map(cheque => {
-          const days = daysUntil(cheque.dueDate);
+          const days     = daysUntil(cheque.dueDate);
           const isUrgent = days <= 2;
           return (
             <Card
@@ -168,13 +172,14 @@ export default function ChequesPage() {
                     {tab === "deposited" && cheque.depositedAt && ` · Deposited: ${formatDate(cheque.depositedAt)}`}
                   </p>
                 </div>
-                <div className="flex-shrink-0 text-right">
+
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <p className="text-base font-medium text-gray-900">{formatLKR(cheque.amount)}</p>
+
                   {tab !== "deposited" && cheque.status === "pending" && (
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="mt-2"
                       loading={depositing === cheque.id}
                       onClick={() => markDeposited(cheque)}
                     >
@@ -184,12 +189,32 @@ export default function ChequesPage() {
                   {tab === "deposited" && (
                     <Badge variant="success">Deposited</Badge>
                   )}
+
+                  {/* Delete — admin only */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setToDelete(cheque)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+                      title="Delete cheque"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                    </button>
+                  )}
                 </div>
               </div>
             </Card>
           );
         })}
       </div>
+
+      {toDelete && (
+        <DeleteConfirmDialog
+          title="Delete cheque"
+          description={`${toDelete.shopName} · ${toDelete.bank} #${toDelete.chequeNo}\n${formatLKR(toDelete.amount)} · Due: ${formatDate(toDelete.dueDate)}`}
+          onConfirm={() => handleDelete(toDelete)}
+          onCancel={() => setToDelete(null)}
+        />
+      )}
     </div>
   );
 }
