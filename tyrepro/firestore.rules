@@ -6,93 +6,95 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
     function isAdmin() {
-      return isAuth() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isAuth() && getRole() == 'admin';
     }
 
-    function isSalesRep() {
-      return isAuth() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'sales_rep'];
+    function isAdminOrSalesRep() {
+      return isAuth() && getRole() in ['admin', 'sales_rep'];
     }
 
-    // Users
+    // Users — anyone authenticated can read their own profile
     match /users/{uid} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Shops
+    // Shops — admin and sales_rep can add/edit/delete
     match /shops/{id} {
       allow read: if isAuth();
-      allow create, update: if isSalesRep();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Products
+    // Products — admin and sales_rep can manage
     match /products/{id} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Stock — read only from client; writes via transactions
+    // Stock — admin and sales_rep can manage
     match /stock/{id} {
       allow read: if isAuth();
-      allow write: if isAuth();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Invoices
+    // Invoices — admin and sales_rep can create and update
     match /invoices/{id} {
       allow read: if isAuth();
-      allow create: if isSalesRep();
-      allow update: if isAdmin();
+      allow create, update: if isAdminOrSalesRep();
+      allow delete: if isAdmin();
       match /items/{itemId} {
         allow read: if isAuth();
-        allow write: if isSalesRep();
+        allow create, update, delete: if isAdminOrSalesRep();
       }
     }
 
-    // Cheques
+    // Cheques — admin and sales_rep can manage
     match /cheques/{id} {
       allow read: if isAuth();
-      allow write: if isSalesRep();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // UC Returns
+    // UC Returns — admin and sales_rep can manage
     match /ucReturns/{id} {
       allow read: if isAuth();
-      allow create: if isSalesRep();
-      allow update: if isSalesRep();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Stock transfers
+    // Stock transfers — admin and sales_rep
     match /stockTransfers/{id} {
       allow read: if isAuth();
-      allow write: if isSalesRep();
+      allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Dispatches
+    // Dispatches — admin and sales_rep plan; driver can update stop status
     match /dispatches/{id} {
       allow read: if isAuth();
-      allow create, update: if isSalesRep();
+      allow create, update: if isAdminOrSalesRep();
+      allow delete: if isAdmin();
       match /stops/{stopId} {
         allow read: if isAuth();
-        allow write: if isAuth();
+        allow create, update: if isAuth(); // driver can mark stops
+        allow delete: if isAdmin();
       }
     }
 
-    // Warehouses
+    // Warehouses — read all, write admin only
     match /warehouses/{id} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Counters
+    // Counters — read and write for authenticated users
     match /counters/{id} {
       allow read, write: if isAuth();
     }
 
-    // System alerts
+    // System alerts — read all auth, write admin only
     match /systemAlerts/{id} {
       allow read: if isAuth();
       allow write: if isAdmin();

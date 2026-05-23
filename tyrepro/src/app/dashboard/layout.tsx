@@ -1,24 +1,37 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { firebaseUser, loading } = useAuth();
-  const router = useRouter();
+// Pages a driver is allowed to access
+const DRIVER_ALLOWED = ["/dashboard", "/dashboard/dispatch"];
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { firebaseUser, appUser, loading } = useAuth();
+  const router   = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !firebaseUser) {
-      router.replace("/login");
+    if (loading) return;
+
+    // Not logged in → go to login
+    if (!firebaseUser) { router.replace("/login"); return; }
+
+    // Deactivated account
+    if (appUser && !appUser.active) { router.replace("/login"); return; }
+
+    // Driver: only dispatch pages
+    if (appUser?.role === "driver") {
+      const allowed = DRIVER_ALLOWED.some(p => pathname === p || pathname.startsWith(p + "/"));
+      if (!allowed) router.replace("/dashboard/dispatch");
     }
-  }, [firebaseUser, loading, router]);
+
+    // Admin and sales_rep: full access to everything
+    // No restrictions needed
+  }, [firebaseUser, appUser, loading, pathname, router]);
 
   if (loading) {
     return (
@@ -28,21 +41,16 @@ export default function DashboardLayout({
     );
   }
 
-  if (!firebaseUser) return null;
+  if (!firebaseUser || !appUser) return null;
 
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar — hidden on mobile, visible md+ */}
       <div className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0">
         <Sidebar />
       </div>
-
-      {/* Main content */}
       <main className="flex-1 md:ml-60 pb-20 md:pb-0">
         {children}
       </main>
-
-      {/* Bottom nav — mobile only */}
       <MobileNav />
     </div>
   );
