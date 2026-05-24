@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
-import { AlertTriangle, ArrowLeftRight, Package, Plus, Pencil, X, Check, Trash2 } from "lucide-react";
+import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
+import {
+  AlertTriangle, ArrowLeftRight, Package,
+  Plus, Minus, Pencil, X, Check, Trash2,
+  ChevronDown, ChevronUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Stock, Product, TyreType } from "@/types";
 import {
@@ -18,6 +23,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
+
+// ── Constants ─────────────────────────────────────────────
 
 const WAREHOUSES = [
   { value: "",             label: "All warehouses" },
@@ -29,7 +36,7 @@ const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other
 // ── Stock bar ─────────────────────────────────────────────
 
 function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) {
-  const pct = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
+  const pct   = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
   const color = qty <= 0 ? "bg-gray-200" : qty <= reorderLevel ? "bg-red-500" : qty <= reorderLevel * 2 ? "bg-amber-400" : "bg-green-500";
   return (
     <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100">
@@ -38,79 +45,223 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   );
 }
 
-function StockRow({ item }: { item: Stock }) {
-  const isLow = item.qty <= item.reorderLevel;
-  const isOut = item.qty === 0;
-  return (
-    <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-          {isOut && <Badge variant="danger">Out of stock</Badge>}
-          {!isOut && isLow && <Badge variant="warning">Low</Badge>}
-        </div>
-        <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
-        <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
-      </div>
-      <div className="text-right flex-shrink-0">
-        <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>{item.qty}</div>
-        <div className="text-xs text-gray-400">units</div>
-      </div>
-    </div>
-  );
-}
+// ── Adjust stock modal ────────────────────────────────────
 
-// ── Delete confirmation modal ─────────────────────────────
-
-function DeleteConfirmModal({ product, onConfirm, onCancel }: {
-  product:   Product;
-  onConfirm: () => void;
-  onCancel:  () => void;
+function AdjustStockModal({
+  item,
+  mode,
+  onClose,
+}: {
+  item:    Stock;
+  mode:    "add" | "remove";
+  onClose: () => void;
 }) {
-  const [deleting, setDeleting] = useState(false);
+  const [qty, setQty]       = useState(1);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState("");
+
+  const maxRemove = item.qty;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (qty < 1) { setError("Quantity must be at least 1."); return; }
+    if (mode === "remove" && qty > maxRemove) {
+      setError(`Only ${maxRemove} units available.`); return;
+    }
+    setSaving(true); setError("");
+    try {
+      const change = mode === "add" ? qty : -qty;
+      await updateDoc(doc(stockCol, item.id), {
+        qty:       increment(change),
+        updatedAt: serverTimestamp(),
+      });
+      // Log the adjustment as a transfer record for audit trail
+      await addDoc(collection(db, "stockAdjustments"), {
+        stockId:       item.id,
+        warehouseId:   item.warehouseId,
+        warehouseName: item.warehouseName,
+        productId:     item.productId,
+        productName:   item.productName,
+        mode,
+        qty,
+        reason:        reason || null,
+        adjustedAt:    serverTimestamp(),
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 flex-shrink-0">
-            <Trash2 className="h-5 w-5 text-red-600" />
-          </div>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
+      <Card className="w-full max-w-sm rounded-t-3xl md:rounded-2xl">
+        <CardHeader
+          title={mode === "add" ? "Add stock" : "Remove stock"}
+          subtitle={`${item.productName} · ${item.warehouseName}`}
+          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
+        />
+
+        {/* Current stock display */}
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+          <span className="text-sm text-gray-600">Current stock</span>
+          <span className={cn("text-lg font-semibold",
+            item.qty <= item.reorderLevel ? "text-red-600" : "text-gray-900"
+          )}>
+            {item.qty} units
+          </span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <h3 className="text-base font-medium text-gray-900">Delete product?</h3>
-            <p className="text-xs text-gray-500">This cannot be undone</p>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              Quantity to {mode === "add" ? "add" : "remove"} *
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setQty(q => Math.max(1, q - 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50 flex-shrink-0"
+              >
+                <Minus className="h-4 w-4 text-gray-600" />
+              </button>
+              <input
+                type="number" min={1} max={mode === "remove" ? maxRemove : undefined}
+                value={qty}
+                onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-center text-lg font-semibold focus:outline-none focus:border-brand-400"
+              />
+              <button
+                type="button"
+                onClick={() => setQty(q => q + 1)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50 flex-shrink-0"
+              >
+                <Plus className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+            {mode === "remove" && (
+              <p className="text-xs text-gray-400 mt-1">Max: {maxRemove} units</p>
+            )}
           </div>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2.5 mb-4">
-          <p className="text-sm font-medium text-gray-900">{product.name}</p>
-          <p className="text-xs text-gray-500">{product.sku}</p>
-        </div>
-        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-4 text-xs text-amber-800">
-          ⚠ Deleting will remove this product from the catalogue. Existing invoices and stock records will not be affected.
-        </div>
-        <div className="flex gap-3">
-          <Button variant="secondary" className="flex-1" onClick={onCancel} type="button">Cancel</Button>
-          <Button variant="danger" className="flex-1" loading={deleting}
-            onClick={async () => { setDeleting(true); await onConfirm(); }}>
-            Delete
-          </Button>
-        </div>
+
+          {/* After adjustment preview */}
+          <div className={cn(
+            "flex items-center justify-between rounded-xl px-4 py-3 text-sm",
+            mode === "add" ? "bg-green-50" : "bg-red-50"
+          )}>
+            <span className={mode === "add" ? "text-green-700" : "text-red-700"}>
+              After adjustment
+            </span>
+            <span className={cn("font-semibold text-lg",
+              mode === "add" ? "text-green-800" : "text-red-800"
+            )}>
+              {mode === "add" ? item.qty + qty : Math.max(0, item.qty - qty)} units
+            </span>
+          </div>
+
+          <Input
+            label="Reason (optional)"
+            placeholder={mode === "add" ? "e.g. New stock received" : "e.g. Damaged goods removed"}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+          />
+
+          {error && (
+            <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+            <Button
+              className={cn("flex-1", mode === "remove" && "bg-red-600 hover:bg-red-700")}
+              type="submit"
+              loading={saving}
+            >
+              {mode === "add" ? "Add stock" : "Remove stock"}
+            </Button>
+          </div>
+        </form>
       </Card>
     </div>
   );
 }
 
+// ── Stock row with inline adjust buttons ──────────────────
+
+function StockRow({ item, canEdit }: { item: Stock; canEdit: boolean }) {
+  const [adjustMode, setAdjustMode] = useState<"add" | "remove" | null>(null);
+  const isLow = item.qty <= item.reorderLevel;
+  const isOut = item.qty === 0;
+
+  return (
+    <>
+      <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
+            {isOut  && <Badge variant="danger">Out of stock</Badge>}
+            {!isOut && isLow && <Badge variant="warning">Low</Badge>}
+          </div>
+          <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
+          <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Qty display */}
+          <div className="text-right">
+            <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>{item.qty}</div>
+            <div className="text-xs text-gray-400">units</div>
+          </div>
+          {/* Adjust buttons — admin/sales_rep only */}
+          {canEdit && (
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => setAdjustMode("add")}
+                title="Add stock"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5 text-green-700" />
+              </button>
+              <button
+                onClick={() => setAdjustMode("remove")}
+                title="Remove stock"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
+              >
+                <Minus className="h-3.5 w-3.5 text-red-700" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {adjustMode && (
+        <AdjustStockModal
+          item={item}
+          mode={adjustMode}
+          onClose={() => setAdjustMode(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Delete confirm ────────────────────────────────────────
+// (reusing DeleteConfirmDialog from components/ui)
+
 // ── Add/Edit product modal ────────────────────────────────
 
 function ProductModal({ existing, onClose }: { existing?: Product; onClose: () => void }) {
-  const [name, setName]         = useState(existing?.name ?? "");
-  const [brand, setBrand]       = useState(existing?.brand ?? "MRF");
+  const [name, setName]          = useState(existing?.name ?? "");
+  const [brand, setBrand]        = useState(existing?.brand ?? "MRF");
   const [customBrand, setCustom] = useState("");
-  const [size, setSize]         = useState(existing?.size ?? "");
-  const [type, setType]         = useState<TyreType>(existing?.type ?? "bike");
-  const [tubeType, setTubeType] = useState<"tube_type" | "tubeless">("tube_type");
-  const [unitPrice, setPrice]   = useState(existing?.unitPrice ?? 0);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
+  const [size, setSize]          = useState(existing?.size ?? "");
+  const [type, setType]          = useState<TyreType>(existing?.type ?? "bike");
+  const [tubeType, setTubeType]  = useState<"tube_type" | "tubeless">("tube_type");
+  const [unitPrice, setPrice]    = useState(existing?.unitPrice ?? 0);
+  const [saving, setSaving]      = useState(false);
+  const [error, setError]        = useState("");
 
   function buildName() {
     const b    = brand === "Other" ? customBrand : brand;
@@ -130,15 +281,12 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
     if (!size || !finalBrand || unitPrice <= 0) { setError("Size, brand and price are required."); return; }
     setSaving(true); setError("");
     const finalName = name || buildName();
-    const sku = existing?.sku ?? buildSku();
+    const sku       = existing?.sku ?? buildSku();
     try {
       if (existing) {
         await updateDoc(doc(productsCol, existing.id), { name: finalName, brand: finalBrand, size, type, unitPrice, updatedAt: serverTimestamp() });
       } else {
-        await addDoc(productsCol, {
-          sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp(),
-          id: ""
-        });
+        await addDoc(productsCol, { sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp() });
       }
       onClose();
     } catch (err: any) { setError(err.message); }
@@ -148,8 +296,10 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader title={existing ? "Edit product" : "Add new product"}
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>} />
+        <CardHeader
+          title={existing ? "Edit product" : "Add new product"}
+          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
+        />
         <form onSubmit={handleSave} className="space-y-3">
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
@@ -223,7 +373,7 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
   const [reorder, setReorder]     = useState(10);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
-  const selectedProduct = products.find(p => p.id === productId);
+  const selectedProduct           = products.find(p => p.id === productId);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -231,7 +381,7 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
     setSaving(true); setError("");
     try {
       const stockDocId = `${warehouseId}_${productId}`;
-      const wh = WAREHOUSES.find(w => w.value === warehouseId)!;
+      const wh         = WAREHOUSES.find(w => w.value === warehouseId)!;
       await setDoc(doc(stockCol, stockDocId), {
         id: stockDocId, warehouseId, warehouseName: wh.label,
         productId, productName: selectedProduct?.name ?? "",
@@ -248,14 +398,14 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-sm rounded-t-3xl md:rounded-2xl">
-        <CardHeader title="Add stock" subtitle="Add inventory to a warehouse"
+        <CardHeader title="Add stock to warehouse"
           action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
         <form onSubmit={handleSave} className="space-y-3">
           <Select label="Product *" value={productId} onChange={e => setProductId(e.target.value)}
             placeholder="Select product..." options={products.map(p => ({ value: p.id, label: p.name }))} />
           <Select label="Warehouse *" value={warehouseId} onChange={e => setWh(e.target.value)} options={WAREHOUSES.slice(1)} />
-          <Input label="Quantity to add *" type="number" min={1} value={qty || ""} onChange={e => setQty(parseInt(e.target.value) || 0)} placeholder="e.g. 50" />
-          <Input label="Reorder level (alert below this)" type="number" min={1} value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
+          <Input label="Quantity *" type="number" min={1} value={qty || ""} onChange={e => setQty(parseInt(e.target.value) || 0)} placeholder="e.g. 50" />
+          <Input label="Reorder alert level" type="number" min={1} value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
           {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
@@ -278,8 +428,7 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   const [submitting, setSub]    = useState(false);
   const [error, setError]       = useState("");
 
-  // Only show products that exist in the FROM warehouse
-  const fromStock = stock.filter(s => s.warehouseId === fromWh);
+  const fromStock     = stock.filter(s => s.warehouseId === fromWh);
   const selectedStock = fromStock.find(s => s.productId === productId);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -295,19 +444,23 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
         productId: selectedStock.productId, productName: selectedStock.productName,
         productSku: selectedStock.productSku, qty, status: "completed",
         createdBy: appUser?.uid ?? "", transferDate: serverTimestamp(), completedAt: serverTimestamp(),
-        id: ""
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
       const toDocId   = `${toWh}_${selectedStock.productId}`;
       await runTransaction(db, async tx => {
-        const fromRef = doc(stockCol, fromDocId), toRef = doc(stockCol, toDocId);
-        const fromSnap = await tx.get(fromRef), toSnap = await tx.get(toRef);
+        const fromRef  = doc(stockCol, fromDocId);
+        const toRef    = doc(stockCol, toDocId);
+        const fromSnap = await tx.get(fromRef);
+        const toSnap   = await tx.get(toRef);
         if (!fromSnap.exists()) throw new Error("Source stock not found.");
         const fromQty = (fromSnap.data() as Stock).qty;
         if (fromQty < qty) throw new Error("Insufficient stock.");
         tx.update(fromRef, { qty: fromQty - qty, updatedAt: serverTimestamp() });
-        if (toSnap.exists()) tx.update(toRef, { qty: (toSnap.data() as Stock).qty + qty, updatedAt: serverTimestamp() });
-        else tx.set(toRef, { ...fromSnap.data(), id: toDocId, warehouseId: toWh, warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh, qty, updatedAt: serverTimestamp() });
+        if (toSnap.exists()) {
+          tx.update(toRef, { qty: (toSnap.data() as Stock).qty + qty, updatedAt: serverTimestamp() });
+        } else {
+          tx.set(toRef, { ...fromSnap.data(), id: toDocId, warehouseId: toWh, warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh, qty, updatedAt: serverTimestamp() });
+        }
       });
       onClose();
     } catch (err: any) { setError(err.message); }
@@ -317,12 +470,12 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
       <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl">
-        <CardHeader title="Stock transfer" subtitle="Move stock between warehouses"
+        <CardHeader title="Transfer stock between warehouses"
           action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
         <form onSubmit={handleSubmit} className="space-y-3">
           <Select label="From warehouse" value={fromWh} onChange={e => { setFromWh(e.target.value); setProduct(""); }} options={WAREHOUSES.slice(1)} />
           <Select label="To warehouse"   value={toWh}   onChange={e => setToWh(e.target.value)}   options={WAREHOUSES.slice(1)} />
-          <Select label="Product (from warehouse stock only)" value={productId} onChange={e => setProduct(e.target.value)} placeholder="Select product..."
+          <Select label="Product (from warehouse stock)" value={productId} onChange={e => setProduct(e.target.value)} placeholder="Select product..."
             options={fromStock.map(s => ({ value: s.productId, label: `${s.productName} (${s.qty} available)` }))} />
           <Input label="Quantity" type="number" min={1} max={selectedStock?.qty} value={qty}
             onChange={e => setQty(Number(e.target.value))} hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
@@ -337,11 +490,15 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   );
 }
 
-// ── Main page ─────────────────────────────────────────────
+// ── Main inventory page ───────────────────────────────────
 
 type InventoryTab = "stock" | "products";
 
 export default function InventoryPage() {
+  const { appUser } = useAuth();
+  const canEdit     = appUser?.role === "admin" || appUser?.role === "sales_rep";
+  const isAdmin     = appUser?.role === "admin";
+
   const [activeTab, setActiveTab]           = useState<InventoryTab>("stock");
   const [warehouseId, setWarehouseId]       = useState("");
   const [search, setSearch]                 = useState("");
@@ -354,13 +511,13 @@ export default function InventoryPage() {
 
   const { stock, lowStockItems, loading: stockLoading } = useStock({ warehouseId: warehouseId || undefined });
 
-  const [products, setProducts]   = useState<Product[]>([]);
+  const [products, setProducts]    = useState<Product[]>([]);
   const [prodLoading, setProdLoad] = useState(true);
 
   useEffect(() => {
     const q = query(productsCol, orderBy("name"));
     return onSnapshot(q, snap => {
-      setProducts(snap.docs.map(d => ({ ...(d.data() as Omit<Product, "id">), id: d.id } as Product)));
+      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
       setProdLoad(false);
     });
   }, []);
@@ -375,7 +532,7 @@ export default function InventoryPage() {
   }
 
   const filteredStock = stock.filter(s => {
-    const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) || s.productSku.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) || s.productSku?.toLowerCase().includes(search.toLowerCase());
     const matchTab    = tyreTab === "all" || s.productType === tyreTab;
     return matchSearch && matchTab;
   });
@@ -391,22 +548,31 @@ export default function InventoryPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
+      {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-medium text-gray-900">Inventory</h1>
-          <p className="text-sm text-gray-500">{stock.length} SKUs · {products.filter(p=>p.active).length} products</p>
+          <p className="text-sm text-gray-500">{stock.length} SKUs · {products.filter(p => p.active).length} products</p>
         </div>
-        <div className="flex gap-2">
-          {activeTab === "stock" && (
-            <>
-              <Button size="sm" variant="secondary" onClick={() => setShowAddStock(true)} className="gap-1.5"><Plus className="h-4 w-4" />Add stock</Button>
-              <Button size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5"><ArrowLeftRight className="h-4 w-4" />Transfer</Button>
-            </>
-          )}
-          {activeTab === "products" && (
-            <Button size="sm" onClick={() => setShowAddProduct(true)} className="gap-1.5"><Plus className="h-4 w-4" />Add product</Button>
-          )}
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            {activeTab === "stock" && (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => setShowAddStock(true)} className="gap-1.5">
+                  <Plus className="h-4 w-4" /> Add stock
+                </Button>
+                <Button size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
+                  <ArrowLeftRight className="h-4 w-4" /> Transfer
+                </Button>
+              </>
+            )}
+            {activeTab === "products" && (
+              <Button size="sm" onClick={() => setShowAddProduct(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Add product
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main tabs */}
@@ -420,8 +586,13 @@ export default function InventoryPage() {
         ))}
       </div>
 
+      {/* Search */}
       <div className="mb-4">
-        <Input placeholder={activeTab === "stock" ? "Search by name or SKU..." : "Search products..."} value={search} onChange={e => setSearch(e.target.value)} />
+        <Input
+          placeholder={activeTab === "stock" ? "Search by name or SKU..." : "Search products..."}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </div>
 
       {/* ── STOCK TAB ── */}
@@ -436,6 +607,8 @@ export default function InventoryPage() {
               </div>
             </div>
           )}
+
+          {/* Warehouse + type filter */}
           <div className="mb-4 flex gap-2">
             <Select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} options={WAREHOUSES} className="flex-1" />
             <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden text-sm">
@@ -448,19 +621,40 @@ export default function InventoryPage() {
               ))}
             </div>
           </div>
+
           {stockLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
+
           {!stockLoading && filteredStock.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">No stock found</p>
-              <Button size="sm" className="mt-4" onClick={() => setShowAddStock(true)}>Add stock</Button>
+              {canEdit && <Button size="sm" className="mt-4" onClick={() => setShowAddStock(true)}>Add stock</Button>}
             </Card>
           )}
+
+          {/* Legend for +/- buttons */}
+          {canEdit && filteredStock.length > 0 && (
+            <div className="mb-2 flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-green-50 border border-green-200"><Plus className="h-3 w-3 text-green-700" /></span>
+                Add stock
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-red-50 border border-red-200"><Minus className="h-3 w-3 text-red-700" /></span>
+                Remove stock
+              </span>
+            </div>
+          )}
+
           {!stockLoading && (
             warehouseId
               ? <Card padding={false}>
-                  <div className="px-4 py-3 border-b border-gray-50"><span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span></div>
-                  <div className="px-4">{filteredStock.map(item => <StockRow key={item.id} item={item} />)}</div>
+                  <div className="px-4 py-3 border-b border-gray-50">
+                    <span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span>
+                  </div>
+                  <div className="px-4">
+                    {filteredStock.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} />)}
+                  </div>
                 </Card>
               : Object.entries(byWarehouse).map(([whName, items]) => (
                   <Card key={whName} padding={false} className="mb-4">
@@ -468,7 +662,9 @@ export default function InventoryPage() {
                       <span className="text-sm font-medium text-gray-700">{whName}</span>
                       <span className="text-xs text-gray-400">{items.reduce((s, i) => s + i.qty, 0)} units total</span>
                     </div>
-                    <div className="px-4">{items.map(item => <StockRow key={item.id} item={item} />)}</div>
+                    <div className="px-4">
+                      {items.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} />)}
+                    </div>
                   </Card>
                 ))
           )}
@@ -479,13 +675,15 @@ export default function InventoryPage() {
       {activeTab === "products" && (
         <>
           {prodLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
+
           {!prodLoading && filteredProducts.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">No products yet</p>
-              <Button size="sm" className="mt-4" onClick={() => setShowAddProduct(true)}>Add first product</Button>
+              {canEdit && <Button size="sm" className="mt-4" onClick={() => setShowAddProduct(true)}>Add first product</Button>}
             </Card>
           )}
+
           <Card padding={false}>
             {filteredProducts.map((p, i) => (
               <div key={p.id} className={`flex items-center gap-3 px-4 py-3 ${i < filteredProducts.length - 1 ? "border-b border-gray-50" : ""}`}>
@@ -497,27 +695,26 @@ export default function InventoryPage() {
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">{p.sku} · {p.brand} · Rs {p.unitPrice?.toLocaleString()}</p>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {/* Edit */}
-                  <button onClick={() => setEditProduct(p)}
-                    className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                    title="Edit">
-                    <Pencil className="h-3.5 w-3.5 text-gray-500" />
-                  </button>
-                  {/* Activate/deactivate */}
-                  <button onClick={() => toggleProductActive(p)}
-                    className={cn("h-7 w-7 flex items-center justify-center rounded-lg border transition-colors",
-                      p.active ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50" : "border-green-300 bg-green-50")}
-                    title={p.active ? "Deactivate" : "Activate"}>
-                    {p.active ? <X className="h-3.5 w-3.5 text-gray-400" /> : <Check className="h-3.5 w-3.5 text-green-600" />}
-                  </button>
-                  {/* Delete */}
-                  <button onClick={() => setDeleteProduct(p)}
-                    className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
-                    title="Delete">
-                    <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
-                  </button>
-                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => setEditProduct(p)}
+                      className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors" title="Edit">
+                      <Pencil className="h-3.5 w-3.5 text-gray-500" />
+                    </button>
+                    <button onClick={() => toggleProductActive(p)}
+                      className={cn("h-7 w-7 flex items-center justify-center rounded-lg border transition-colors",
+                        p.active ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50" : "border-green-300 bg-green-50")}
+                      title={p.active ? "Deactivate" : "Activate"}>
+                      {p.active ? <X className="h-3.5 w-3.5 text-gray-400" /> : <Check className="h-3.5 w-3.5 text-green-600" />}
+                    </button>
+                    {isAdmin && (
+                      <button onClick={() => setDeleteProduct(p)}
+                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors" title="Delete">
+                        <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </Card>
@@ -529,7 +726,14 @@ export default function InventoryPage() {
       {showAddStock   && <AddStockModal products={products.filter(p => p.active)} onClose={() => setShowAddStock(false)} />}
       {showAddProduct && <ProductModal onClose={() => setShowAddProduct(false)} />}
       {editProduct    && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
-      {deleteProduct  && <DeleteConfirmModal product={deleteProduct} onConfirm={() => handleDeleteProduct(deleteProduct)} onCancel={() => setDeleteProduct(undefined)} />}
+      {deleteProduct  && (
+        <DeleteConfirmDialog
+          title="Delete product"
+          description={`${deleteProduct.name} (${deleteProduct.sku})`}
+          onConfirm={() => handleDeleteProduct(deleteProduct)}
+          onCancel={() => setDeleteProduct(undefined)}
+        />
+      )}
     </div>
   );
 }

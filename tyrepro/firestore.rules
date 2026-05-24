@@ -18,31 +18,34 @@ service cloud.firestore {
       return isAuth() && getRole() in ['admin', 'sales_rep'];
     }
 
-    // Users — anyone authenticated can read their own profile
     match /users/{uid} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
     }
 
-    // Shops — admin and sales_rep can add/edit/delete
     match /shops/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Products — admin and sales_rep can manage
     match /products/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Stock — admin and sales_rep can manage
+    // Stock — admin and sales_rep can read and write freely
     match /stock/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Invoices — admin and sales_rep can create and update
+    // Stock adjustments audit log
+    match /stockAdjustments/{id} {
+      allow read: if isAuth();
+      allow create: if isAdminOrSalesRep();
+      allow update, delete: if isAdmin();
+    }
+
     match /invoices/{id} {
       allow read: if isAuth();
       allow create, update: if isAdminOrSalesRep();
@@ -53,54 +56,46 @@ service cloud.firestore {
       }
     }
 
-    // Cheques — admin and sales_rep can manage
     match /cheques/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // UC Returns — admin and sales_rep can manage
     match /ucReturns/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Stock transfers — admin and sales_rep
     match /stockTransfers/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrSalesRep();
     }
 
-    // Dispatches — admin and sales_rep plan; driver can update stop status
     match /dispatches/{id} {
       allow read: if isAuth();
       allow create, update: if isAdminOrSalesRep();
       allow delete: if isAdmin();
       match /stops/{stopId} {
         allow read: if isAuth();
-        allow create, update: if isAuth(); // driver can mark stops
+        allow create, update: if isAuth();
         allow delete: if isAdmin();
       }
     }
 
-    // Warehouses — read all, write admin only
     match /warehouses/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
     }
 
-    // Counters — read and write for authenticated users
     match /counters/{id} {
       allow read, write: if isAuth();
     }
 
-    // System alerts — read all auth, write admin only
     match /systemAlerts/{id} {
       allow read: if isAuth();
       allow write: if isAdmin();
     }
 
-    // Alert settings per user
     match /alertSettings/{uid} {
       allow read, write: if isAuth() && request.auth.uid == uid;
     }
