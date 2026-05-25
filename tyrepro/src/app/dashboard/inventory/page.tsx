@@ -11,8 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import {
   AlertTriangle, ArrowLeftRight, Package,
-  Plus, Minus, Pencil, X, Check, Trash2,
-  ChevronDown, ChevronUp,
+  Plus, Pencil, X, Check, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Stock, Product, TyreType } from "@/types";
@@ -45,205 +44,39 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   );
 }
 
-// ── Adjust stock modal ────────────────────────────────────
+// ── Stock row with delete button ──────────────────────────
 
-function AdjustStockModal({
-  item,
-  mode,
-  onClose,
-}: {
-  item:    Stock;
-  mode:    "add" | "remove";
-  onClose: () => void;
-}) {
-  const [qty, setQty]       = useState(1);
-  const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState("");
-
-  const maxRemove = item.qty;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (qty < 1) { setError("Quantity must be at least 1."); return; }
-    if (mode === "remove" && qty > maxRemove) {
-      setError(`Only ${maxRemove} units available.`); return;
-    }
-    setSaving(true); setError("");
-    try {
-      const change = mode === "add" ? qty : -qty;
-      await updateDoc(doc(stockCol, item.id), {
-        qty:       increment(change),
-        updatedAt: serverTimestamp(),
-      });
-      // Log the adjustment as a transfer record for audit trail
-      await addDoc(collection(db, "stockAdjustments"), {
-        stockId:       item.id,
-        warehouseId:   item.warehouseId,
-        warehouseName: item.warehouseName,
-        productId:     item.productId,
-        productName:   item.productName,
-        mode,
-        qty,
-        reason:        reason || null,
-        adjustedAt:    serverTimestamp(),
-      });
-      onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-sm rounded-t-3xl md:rounded-2xl">
-        <CardHeader
-          title={mode === "add" ? "Add stock" : "Remove stock"}
-          subtitle={`${item.productName} · ${item.warehouseName}`}
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
-        />
-
-        {/* Current stock display */}
-        <div className="mb-4 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
-          <span className="text-sm text-gray-600">Current stock</span>
-          <span className={cn("text-lg font-semibold",
-            item.qty <= item.reorderLevel ? "text-red-600" : "text-gray-900"
-          )}>
-            {item.qty} units
-          </span>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Quantity to {mode === "add" ? "add" : "remove"} *
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setQty(q => Math.max(1, q - 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50 flex-shrink-0"
-              >
-                <Minus className="h-4 w-4 text-gray-600" />
-              </button>
-              <input
-                type="number" min={1} max={mode === "remove" ? maxRemove : undefined}
-                value={qty}
-                onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-center text-lg font-semibold focus:outline-none focus:border-brand-400"
-              />
-              <button
-                type="button"
-                onClick={() => setQty(q => q + 1)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50 flex-shrink-0"
-              >
-                <Plus className="h-4 w-4 text-gray-600" />
-              </button>
-            </div>
-            {mode === "remove" && (
-              <p className="text-xs text-gray-400 mt-1">Max: {maxRemove} units</p>
-            )}
-          </div>
-
-          {/* After adjustment preview */}
-          <div className={cn(
-            "flex items-center justify-between rounded-xl px-4 py-3 text-sm",
-            mode === "add" ? "bg-green-50" : "bg-red-50"
-          )}>
-            <span className={mode === "add" ? "text-green-700" : "text-red-700"}>
-              After adjustment
-            </span>
-            <span className={cn("font-semibold text-lg",
-              mode === "add" ? "text-green-800" : "text-red-800"
-            )}>
-              {mode === "add" ? item.qty + qty : Math.max(0, item.qty - qty)} units
-            </span>
-          </div>
-
-          <Input
-            label="Reason (optional)"
-            placeholder={mode === "add" ? "e.g. New stock received" : "e.g. Damaged goods removed"}
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-          />
-
-          {error && (
-            <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
-          )}
-
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
-            <Button
-              className={cn("flex-1", mode === "remove" && "bg-red-600 hover:bg-red-700")}
-              type="submit"
-              loading={saving}
-            >
-              {mode === "add" ? "Add stock" : "Remove stock"}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    </div>
-  );
-}
-
-// ── Stock row with inline adjust buttons ──────────────────
-
-function StockRow({ item, canEdit }: { item: Stock; canEdit: boolean }) {
-  const [adjustMode, setAdjustMode] = useState<"add" | "remove" | null>(null);
+function StockRow({ item, canEdit, onDelete }: { item: Stock; canEdit: boolean; onDelete: (item: Stock) => void }) {
   const isLow = item.qty <= item.reorderLevel;
   const isOut = item.qty === 0;
 
   return (
-    <>
-      <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-            {isOut  && <Badge variant="danger">Out of stock</Badge>}
-            {!isOut && isLow && <Badge variant="warning">Low</Badge>}
-          </div>
-          <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
-          <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
+    <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
+          {isOut  && <Badge variant="danger">Out of stock</Badge>}
+          {!isOut && isLow && <Badge variant="warning">Low</Badge>}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Qty display */}
-          <div className="text-right">
-            <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>{item.qty}</div>
-            <div className="text-xs text-gray-400">units</div>
-          </div>
-          {/* Adjust buttons — admin/sales_rep only */}
-          {canEdit && (
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => setAdjustMode("add")}
-                title="Add stock"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5 text-green-700" />
-              </button>
-              <button
-                onClick={() => setAdjustMode("remove")}
-                title="Remove stock"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
-              >
-                <Minus className="h-3.5 w-3.5 text-red-700" />
-              </button>
-            </div>
-          )}
-        </div>
+        <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
+        <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
       </div>
-
-      {adjustMode && (
-        <AdjustStockModal
-          item={item}
-          mode={adjustMode}
-          onClose={() => setAdjustMode(null)}
-        />
-      )}
-    </>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="text-right">
+          <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>{item.qty}</div>
+          <div className="text-xs text-gray-400">units</div>
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => onDelete(item)}
+            title="Delete stock record"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="h-4 w-4 text-gray-400" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -508,6 +341,7 @@ export default function InventoryPage() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editProduct, setEditProduct]       = useState<Product | undefined>();
   const [deleteProduct, setDeleteProduct]   = useState<Product | undefined>();
+  const [deleteStock, setDeleteStock]       = useState<Stock | undefined>();
 
   const { stock, lowStockItems, loading: stockLoading } = useStock({ warehouseId: warehouseId || undefined });
 
@@ -525,6 +359,11 @@ export default function InventoryPage() {
   async function handleDeleteProduct(p: Product) {
     await deleteDoc(doc(productsCol, p.id));
     setDeleteProduct(undefined);
+  }
+
+  async function handleDeleteStock(s: Stock) {
+    await deleteDoc(doc(stockCol, s.id));
+    setDeleteStock(undefined);
   }
 
   async function toggleProductActive(p: Product) {
@@ -632,16 +471,14 @@ export default function InventoryPage() {
             </Card>
           )}
 
-          {/* Legend for +/- buttons */}
+          {/* Legend for delete button */}
           {canEdit && filteredStock.length > 0 && (
-            <div className="mb-2 flex items-center gap-3 text-xs text-gray-400">
+            <div className="mb-2 flex items-center gap-2 text-xs text-gray-400">
               <span className="flex items-center gap-1">
-                <span className="flex h-5 w-5 items-center justify-center rounded bg-green-50 border border-green-200"><Plus className="h-3 w-3 text-green-700" /></span>
-                Add stock
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="flex h-5 w-5 items-center justify-center rounded bg-red-50 border border-red-200"><Minus className="h-3 w-3 text-red-700" /></span>
-                Remove stock
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-red-50 border border-red-200">
+                  <Trash2 className="h-3 w-3 text-red-400" />
+                </span>
+                Delete stock record
               </span>
             </div>
           )}
@@ -653,7 +490,7 @@ export default function InventoryPage() {
                     <span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span>
                   </div>
                   <div className="px-4">
-                    {filteredStock.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} />)}
+                    {filteredStock.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />)}
                   </div>
                 </Card>
               : Object.entries(byWarehouse).map(([whName, items]) => (
@@ -663,7 +500,7 @@ export default function InventoryPage() {
                       <span className="text-xs text-gray-400">{items.reduce((s, i) => s + i.qty, 0)} units total</span>
                     </div>
                     <div className="px-4">
-                      {items.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} />)}
+                      {items.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />)}
                     </div>
                   </Card>
                 ))
@@ -732,6 +569,14 @@ export default function InventoryPage() {
           description={`${deleteProduct.name} (${deleteProduct.sku})`}
           onConfirm={() => handleDeleteProduct(deleteProduct)}
           onCancel={() => setDeleteProduct(undefined)}
+        />
+      )}
+      {deleteStock && (
+        <DeleteConfirmDialog
+          title="Delete stock record"
+          description={`${deleteStock.productName} · ${deleteStock.warehouseName}\nCurrent qty: ${deleteStock.qty} units`}
+          onConfirm={() => handleDeleteStock(deleteStock)}
+          onCancel={() => setDeleteStock(undefined)}
         />
       )}
     </div>
