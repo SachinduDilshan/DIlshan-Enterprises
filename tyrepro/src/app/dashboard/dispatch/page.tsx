@@ -27,7 +27,11 @@ export default function DispatchPage() {
   useEffect(() => {
     const q = query(dispatchesCol, orderBy("dispatchDate", "desc"));
     const unsub = onSnapshot(q, snap => {
-      setDispatches(snap.docs.map(d => ({ id: d.id, ...d.data() } as Dispatch)));
+      const docs = snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Dispatch, "id">),
+      }));
+      setDispatches(docs as Dispatch[]);
       setLoading(false);
     });
     return unsub;

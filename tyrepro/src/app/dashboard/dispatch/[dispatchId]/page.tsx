@@ -96,7 +96,10 @@ export default function DispatchDetailPage() {
   // Load dispatch doc
   useEffect(() => {
     const unsub = onSnapshot(doc(dispatchesCol, dispatchId), snap => {
-      if (snap.exists()) setDispatch({ id: snap.id, ...snap.data() } as Dispatch);
+      if (snap.exists()) {
+        const data = snap.data() as Omit<Dispatch, "id">;
+        setDispatch({ ...data, id: snap.id });
+      }
       setLoading(false);
     });
     return unsub;
@@ -106,7 +109,10 @@ export default function DispatchDetailPage() {
   useEffect(() => {
     const q   = query(dispatchStopsCol(dispatchId), orderBy("stopOrder"));
     const unsub = onSnapshot(q, snap => {
-      setStops(snap.docs.map(d => ({ id: d.id, ...d.data() } as DispatchStop)));
+      setStops(snap.docs.map(d => {
+        const data = d.data() as Omit<DispatchStop, "id">;
+        return { ...data, id: d.id } as DispatchStop;
+      }));
     });
     return unsub;
   }, [dispatchId]);

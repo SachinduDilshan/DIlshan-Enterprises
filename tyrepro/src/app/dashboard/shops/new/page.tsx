@@ -47,6 +47,7 @@ export default function NewShopPage() {
         active:             true,
         createdAt:          serverTimestamp(),
         updatedAt:          serverTimestamp(),
+        id:                 "", // will be set in Firestore trigger
       });
       router.push("/dashboard/shops");
     } catch (err: any) {

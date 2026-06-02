@@ -119,7 +119,10 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
       if (existing) {
         await updateDoc(doc(productsCol, existing.id), { name: finalName, brand: finalBrand, size, type, unitPrice, updatedAt: serverTimestamp() });
       } else {
-        await addDoc(productsCol, { sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp() });
+        await addDoc(productsCol, {
+          sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp(),
+          id: ""
+        });
       }
       onClose();
     } catch (err: any) { setError(err.message); }
@@ -215,14 +218,35 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
     try {
       const stockDocId = `${warehouseId}_${productId}`;
       const wh         = WAREHOUSES.find(w => w.value === warehouseId)!;
-      await setDoc(doc(stockCol, stockDocId), {
-        id: stockDocId, warehouseId, warehouseName: wh.label,
-        productId, productName: selectedProduct?.name ?? "",
-        productSku: selectedProduct?.sku ?? "",
-        productType: selectedProduct?.type ?? "bike",
-        qty: increment(qty), reorderLevel: reorder,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
+      const stockRef   = doc(stockCol, stockDocId);
+
+      // Use a transaction so qty is always a real number (never a sentinel)
+      await runTransaction(db, async (tx) => {
+        const existing = await tx.get(stockRef);
+        if (existing.exists()) {
+          // Doc already exists — add to current qty
+          const currentQty = (existing.data() as Stock).qty ?? 0;
+          tx.update(stockRef, {
+            qty:          currentQty + qty,
+            reorderLevel: reorder,
+            updatedAt:    serverTimestamp(),
+          });
+        } else {
+          // New stock doc — create with all fields and a plain number
+          tx.set(stockRef, {
+            id:           stockDocId,
+            warehouseId,
+            warehouseName: wh.label,
+            productId,
+            productName:  selectedProduct?.name ?? "",
+            productSku:   selectedProduct?.sku  ?? "",
+            productType:  selectedProduct?.type ?? "bike",
+            qty,          // plain number — not increment()
+            reorderLevel: reorder,
+            updatedAt:    serverTimestamp(),
+          });
+        }
+      });
       onClose();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
@@ -277,6 +301,7 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
         productId: selectedStock.productId, productName: selectedStock.productName,
         productSku: selectedStock.productSku, qty, status: "completed",
         createdBy: appUser?.uid ?? "", transferDate: serverTimestamp(), completedAt: serverTimestamp(),
+        id: ""
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
       const toDocId   = `${toWh}_${selectedStock.productId}`;
@@ -351,7 +376,7 @@ export default function InventoryPage() {
   useEffect(() => {
     const q = query(productsCol, orderBy("name"));
     return onSnapshot(q, snap => {
-      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+      setProducts(snap.docs.map(d => ({ ...(d.data() as Product), id: d.id })));
       setProdLoad(false);
     });
   }, []);
@@ -560,7 +585,7 @@ export default function InventoryPage() {
 
       {/* Modals */}
       {showTransfer   && <TransferModal stock={stock} onClose={() => setShowTransfer(false)} />}
-      {showAddStock   && <AddStockModal products={products.filter(p => p.active)} onClose={() => setShowAddStock(false)} />}
+      {showAddStock   && <AddStockModal products={products.filter(p => p.active !== false)} onClose={() => setShowAddStock(false)} />}
       {showAddProduct && <ProductModal onClose={() => setShowAddProduct(false)} />}
       {editProduct    && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
       {deleteProduct  && (

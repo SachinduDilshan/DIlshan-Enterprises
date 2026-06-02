@@ -99,7 +99,11 @@ export default function NewInvoicePage() {
   }
 
   function stockQty(productId: string): number {
-    return stock.find(s => s.productId === productId)?.qty ?? 0;
+    const found = stock.find(s => s.productId === productId);
+    if (!found) return 0;
+    // Guard against increment() sentinel being stored as an object
+    const qty = found.qty;
+    return typeof qty === "number" ? qty : 0;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -139,17 +143,18 @@ export default function NewInvoicePage() {
         const invRef = doc(invoicesCol);
         tx.set(invRef, {
           invoiceNo,
-          shopId:        selectedShop.id,
-          shopName:      selectedShop.name,
-          warehouseId:   selectedShop.assignedWarehouseId,
+          shopId: selectedShop.id,
+          shopName: selectedShop.name,
+          warehouseId: selectedShop.assignedWarehouseId,
           warehouseName: selectedShop.assignedWarehouseId === "kurunegala" ? "Kurunegala" : "Anuradhapura",
-          createdBy:     appUser!.uid,
+          createdBy: appUser!.uid,
           paymentType,
-          totalAmount:   total,
-          status:        "confirmed",
+          totalAmount: total,
+          status: "confirmed",
           invoiceDate,
-          createdAt:     serverTimestamp(),
-          updatedAt:     serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          id: ""
         });
 
         // 4. Create invoice items in subcollection (outside transaction — subcollections don't support tx.set in all SDK versions)
@@ -166,17 +171,18 @@ export default function NewInvoicePage() {
         if (isCheque && dueDate) {
           const chequeRef = doc(chequesCol);
           tx.set(chequeRef, {
-            invoiceId:   invRef.id,
+            invoiceId: invRef.id,
             invoiceNo,
-            shopId:      selectedShop.id,
-            shopName:    selectedShop.name,
+            shopId: selectedShop.id,
+            shopName: selectedShop.name,
             chequeNo,
             bank,
-            amount:      total,
-            dueDate:     Timestamp.fromDate(dueDate),
-            status:      "pending",
-            createdAt:   serverTimestamp(),
-            updatedAt:   serverTimestamp(),
+            amount: total,
+            dueDate: Timestamp.fromDate(dueDate),
+            status: "pending",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            id: ""
           });
         }
 
@@ -192,13 +198,14 @@ export default function NewInvoicePage() {
         const itemsCol = invoiceItemsCol(invId);
         for (const li of lineItems) {
           await addDoc(itemsCol, {
-            invoiceId:   invId,
-            productId:   li.productId,
+            invoiceId: invId,
+            productId: li.productId,
             productName: li.productName,
-            productSku:  li.productSku,
-            qty:         li.qty,
-            unitPrice:   li.unitPrice,
-            lineTotal:   li.qty * li.unitPrice,
+            productSku: li.productSku,
+            qty: li.qty,
+            unitPrice: li.unitPrice,
+            lineTotal: li.qty * li.unitPrice,
+            id: ""
           });
         }
       }

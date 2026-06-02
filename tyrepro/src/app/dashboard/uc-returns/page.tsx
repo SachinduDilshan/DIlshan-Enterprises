@@ -261,7 +261,11 @@ export default function UCReturnsPage() {
   useEffect(() => {
     const q = query(ucReturnsCol, orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as UCReturn));
+      const all = snap.docs.map(d => {
+        const data = d.data() as Record<string, any>;
+        if (data.hasOwnProperty("id")) delete data.id; // avoid duplicate id property
+        return ({ id: d.id, ...data } as UCReturn);
+      });
       setAllReturns(all);
       setReturns(tab === "active" ? all.filter(r => r.status !== "closed") : all.filter(r => r.status === "closed"));
       setLoading(false);

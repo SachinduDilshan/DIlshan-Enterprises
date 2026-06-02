@@ -124,6 +124,7 @@ export default function NewDispatchPage() {
         dispatchDate:      Timestamp.fromDate(new Date(dispatchDate)),
         notes:             "",
         createdAt:         serverTimestamp(),
+        id:                "", // will be set in Firestore trigger
       });
 
       // Write each stop as subcollection document
@@ -140,8 +141,8 @@ export default function NewDispatchPage() {
           items:       s.items,
           totalUnits:  s.items.reduce((sum, it) => sum + it.qty, 0),
           status:      "pending",
-          deliveredAt: null,
-          skippedReason: null,
+          deliveredAt: undefined,
+          skippedReason: undefined,
         });
       }
 

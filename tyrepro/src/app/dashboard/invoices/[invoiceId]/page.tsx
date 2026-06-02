@@ -42,17 +42,17 @@ export default function InvoiceDetailPage() {
       // Invoice
       const invSnap = await getDoc(doc(invoicesCol, invoiceId));
       if (!invSnap.exists()) { setLoading(false); return; }
-      const inv = { id: invSnap.id, ...invSnap.data() } as Invoice;
+      const inv = { ...(invSnap.data() as Omit<Invoice, "id">), id: invSnap.id } as Invoice;
       setInvoice(inv);
 
       // Line items
       const itemsSnap = await getDocs(invoiceItemsCol(invoiceId));
-      setItems(itemsSnap.docs.map(d => ({ id: d.id, ...d.data() } as InvoiceItem)));
+      setItems(itemsSnap.docs.map(d => ({ ...(d.data() as Omit<InvoiceItem, "id">), id: d.id } as InvoiceItem)));
 
       // Cheque if applicable
       if (inv.chequeId) {
         const cheqSnap = await getDoc(doc(db, "cheques", inv.chequeId));
-        if (cheqSnap.exists()) setCheque({ id: cheqSnap.id, ...cheqSnap.data() } as Cheque);
+        if (cheqSnap.exists()) setCheque({ ...(cheqSnap.data() as Omit<Cheque, "id">), id: cheqSnap.id } as Cheque);
       }
 
       setLoading(false);

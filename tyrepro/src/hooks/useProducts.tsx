@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { query, onSnapshot, where, orderBy } from "firebase/firestore";
-import { productsCol } from "@/lib/firestore-collections";
+import { query, onSnapshot, orderBy, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import type { Product } from "@/types";
 
 export function useProducts() {
@@ -10,18 +10,17 @@ export function useProducts() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    const q = query(productsCol, where("active", "==", true), orderBy("name"));
+    // No compound index needed — just order by name
+    const q = query(collection(db, "products"), orderBy("name"));
     const unsub = onSnapshot(q, (snap) => {
-      setProducts(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return ({ id: d.id, ...(data as Omit<Product, "id">) } as Product);
-        })
-      );
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+      // Treat missing `active` field as active=true (handles old/new docs)
+      setProducts(all.filter(p => p.active !== false));
       setLoading(false);
     });
     return unsub;
   }, []);
 
+  // Also expose allProducts including inactive — useful for management screens
   return { products, loading };
 }

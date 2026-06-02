@@ -24,7 +24,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (appUser && !appUser.active) { router.replace("/login"); return; }
 
     // Driver: only dispatch pages
-    if (appUser?.role === "driver") {
+    const userRole = appUser?.role as string | undefined;
+    if (userRole === "driver") {
       const allowed = DRIVER_ALLOWED.some(p => pathname === p || pathname.startsWith(p + "/"));
       if (!allowed) router.replace("/dashboard/dispatch");
     }
