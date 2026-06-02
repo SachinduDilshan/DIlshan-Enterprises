@@ -125,24 +125,24 @@ export default function NewUCReturnPage() {
         productId,
         productName,
         productSku,
-        unitPrice,
+        unitPrice:            unitPrice ?? 0,
         qty,
-        totalValue:           unitPrice * qty,
+        totalValue:           (unitPrice ?? 0) * qty,
         reason,
-        reasonNotes:          reasonNotes || undefined,
+        reasonNotes:          reasonNotes.trim() !== "" ? reasonNotes.trim() : null,
         status:               "approved",
         gaveTyreToShop,
         gaveTyreToShopAt:     gaveTyreToShop
           ? Timestamp.fromDate(new Date(gaveTyreAt))
-          : undefined,
+          : null,
         tyreReceivedFromShop: true,
         tyreReceivedAt:       Timestamp.fromDate(new Date(returnReceivedAt)),
-        sentToSupplierAt:     undefined,
-        replacementReceivedAt: undefined,
+        sentToSupplierAt:     null,
+        replacementReceivedAt: null,
         createdBy:            appUser?.uid ?? "",
         createdAt:            serverTimestamp(),
         updatedAt:            serverTimestamp(),
-      } as any);
+      });
       router.push("/dashboard/uc-returns");
     } catch (err: any) {
       setError(err.message ?? "Failed to save.");

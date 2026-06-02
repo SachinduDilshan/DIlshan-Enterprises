@@ -121,7 +121,6 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
       } else {
         await addDoc(productsCol, {
           sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp(),
-          id: ""
         });
       }
       onClose();
