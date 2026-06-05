@@ -6,7 +6,7 @@ import { useAlerts } from "@/hooks/useAlerts";
 import { Card } from "@/components/ui/Card";
 import {
   Package, FileText, CalendarClock, RotateCcw,
-  TrendingUp, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
+  TrendingUp, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Truck,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -18,11 +18,12 @@ import { db } from "@/lib/firebase";
 import { formatLKR } from "@/lib/utils";
 import type { Invoice } from "@/types";
 
-const quickLinks = [
-  { href: "/dashboard/invoices/new", label: "New Invoice",    icon: FileText,      color: "bg-brand-50 text-brand-600" },
-  { href: "/dashboard/inventory",    label: "View Inventory", icon: Package,       color: "bg-green-50 text-green-600" },
-  { href: "/dashboard/cheques",      label: "Cheques Due",    icon: CalendarClock, color: "bg-amber-50 text-amber-600" },
-  { href: "/dashboard/uc-returns",   label: "UC Returns",     icon: RotateCcw,     color: "bg-red-50 text-red-600"    },
+const ALL_QUICK_LINKS = [
+  { href: "/dashboard/invoices/new", label: "New Invoice",    icon: FileText,      color: "bg-brand-50 text-brand-600", roles: ["admin","sales_rep"]           },
+  { href: "/dashboard/inventory",    label: "View Inventory", icon: Package,       color: "bg-green-50 text-green-600", roles: ["admin","sales_rep"]           },
+  { href: "/dashboard/cheques",      label: "Cheques Due",    icon: CalendarClock, color: "bg-amber-50 text-amber-600", roles: ["admin","sales_rep"]           },
+  { href: "/dashboard/uc-returns",   label: "UC Returns",     icon: RotateCcw,     color: "bg-red-50 text-red-600",    roles: ["admin","sales_rep"]           },
+  { href: "/dashboard/dispatch",     label: "Dispatch",       icon: Truck,         color: "bg-blue-50 text-blue-600",  roles: ["admin","sales_rep","driver"]  },
 ];
 
 const ALERT_LINKS: Record<string, string> = {
@@ -143,8 +144,11 @@ export default function DashboardPage() {
     loadStats();
   }, []);
 
-  const hour     = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const role       = appUser?.role ?? "sales_rep";
+  const quickLinks = ALL_QUICK_LINKS.filter(l => l.roles.includes(role));
+  const isDriver   = role === "driver";
+  const hour       = new Date().getHours();
+  const greeting   = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -157,10 +161,11 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Live alert banners */}
-      <AlertBanner />
+      {/* Alert banners — admin/sales_rep only */}
+      {!isDriver && <AlertBanner />}
 
-      {/* Stats row */}
+      {/* Stats — admin/sales_rep only */}
+      {!isDriver && (
       <div className="grid grid-cols-2 gap-3 mb-6">
         <Card className="flex items-center gap-3">
           <div className="rounded-xl bg-brand-50 p-2.5">
@@ -185,6 +190,7 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+      )} {/* end !isDriver stats */}
 
       {/* Quick actions */}
       <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Quick actions</h2>
@@ -201,8 +207,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Recent invoices */}
-      {recentInvoices.length > 0 && (
+      {/* Recent invoices — admin/sales_rep only */}
+      {!isDriver && recentInvoices.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Today's invoices</h2>
