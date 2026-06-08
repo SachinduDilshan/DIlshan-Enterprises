@@ -15,14 +15,18 @@ const ALERT_LINKS: Record<string, string> = {
   ceat_overdue:    "/dashboard/uc-returns",
 };
 
-export function NotificationBell() {
-  const { notifications, totalCount, hasNew, loading, markAsSeen, refreshAlerts } = useNotifications();
-  const [open, setOpen]         = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
+interface Props {
+  position?: "sidebar" | "mobile";
+}
 
-  // Close on outside click
+export function NotificationBell({ position = "sidebar" }: Props) {
+  const { notifications, totalCount, hasNew, loading, markAsSeen, refreshAlerts } =
+    useNotifications();
+  const [open, setOpen]             = useState(false);
+  const [expanded, setExpanded]     = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const panelRef                    = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
@@ -44,6 +48,11 @@ export function NotificationBell() {
     setRefreshing(false);
   }
 
+  // Panel position: sidebar = fixed to right of screen, mobile = bottom-up
+  const panelClass = position === "mobile"
+    ? "fixed bottom-16 left-2 right-2 z-50 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden"
+    : "fixed top-4 left-64 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden";
+
   return (
     <div className="relative" ref={panelRef}>
       {/* Bell button */}
@@ -57,38 +66,40 @@ export function NotificationBell() {
       >
         <Bell className={cn("h-4 w-4", open ? "text-brand-600" : "text-gray-500")} />
 
-        {/* Red dot — shows when there are new unread alerts */}
+        {/* Red dot badge */}
         {hasNew && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-            {totalCount > 9 ? "9+" : totalCount}
-          </span>
-        )}
-
-        {/* Pulsing ring when new */}
-        {hasNew && (
-          <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-400 animate-ping opacity-60" />
+          <>
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white z-10">
+              {totalCount > 9 ? "9+" : totalCount}
+            </span>
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-400 animate-ping opacity-60" />
+          </>
         )}
       </button>
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+        <div className={panelClass}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
             <div>
               <p className="text-sm font-medium text-gray-900">Notifications</p>
               <p className="text-xs text-gray-500">
-                {totalCount > 0 ? `${totalCount} active alert${totalCount > 1 ? "s" : ""}` : "All clear"}
+                {totalCount > 0
+                  ? `${totalCount} active alert${totalCount > 1 ? "s" : ""}`
+                  : "All clear"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
                 className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-200 transition-colors"
                 title="Refresh alerts"
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 text-gray-500", refreshing && "animate-spin")} />
+                <RefreshCw
+                  className={cn("h-3.5 w-3.5 text-gray-500", refreshing && "animate-spin")}
+                />
               </button>
               <button
                 onClick={() => setOpen(false)}
@@ -100,7 +111,7 @@ export function NotificationBell() {
           </div>
 
           {/* Content */}
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[400px] overflow-y-auto">
             {loading && (
               <div className="flex justify-center py-8">
                 <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
@@ -121,28 +132,34 @@ export function NotificationBell() {
               </div>
             )}
 
-            {!loading && notifications.map(alert => {
-              const colorClass = ALERT_COLORS[alert.type] ?? "text-gray-700 bg-gray-50 border-gray-200";
-              const icon       = ALERT_ICONS[alert.type] ?? "🔔";
-              const link       = ALERT_LINKS[alert.type];
-              const isExpanded = expanded === alert.type;
+            {!loading &&
+              notifications.map(alert => {
+                const colorClass =
+                  ALERT_COLORS[alert.type] ?? "text-gray-700 bg-gray-50 border-gray-200";
+                const icon       = ALERT_ICONS[alert.type] ?? "🔔";
+                const link       = ALERT_LINKS[alert.type];
+                const isExpanded = expanded === alert.type;
+                const textColor  = colorClass.split(" ")[0];
 
-              return (
-                <div key={alert.type} className={cn("border-b border-gray-50 last:border-0")}>
-                  <div className={cn("px-4 py-3 border-l-4", colorClass.split(" ").slice(1).join(" "),
-                    "border-l-current"
-                  )}>
+                return (
+                  <div
+                    key={alert.type}
+                    className={cn(
+                      "border-b border-gray-50 last:border-0 px-4 py-3 border-l-4",
+                      colorClass.split(" ").slice(1).join(" ")
+                    )}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <span className="text-base flex-shrink-0">{icon}</span>
                         <div className="flex-1 min-w-0">
-                          <p className={cn("text-xs font-semibold", colorClass.split(" ")[0])}>
+                          <p className={cn("text-xs font-semibold", textColor)}>
                             {alert.count} × {alert.message}
                           </p>
                           {isExpanded && (
                             <ul className="mt-2 space-y-1">
                               {alert.items.map((item, i) => (
-                                <li key={i} className={cn("text-xs opacity-80", colorClass.split(" ")[0])}>
+                                <li key={i} className={cn("text-xs opacity-80", textColor)}>
                                   • {item}
                                 </li>
                               ))}
@@ -154,28 +171,28 @@ export function NotificationBell() {
                         onClick={() => setExpanded(isExpanded ? null : alert.type)}
                         className="flex-shrink-0 mt-0.5"
                       >
-                        {isExpanded
-                          ? <ChevronUp className="h-3.5 w-3.5 text-gray-400" />
-                          : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+                        {isExpanded ? (
+                          <ChevronUp className="h-3.5 w-3.5 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                        )}
                       </button>
                     </div>
-
                     {link && (
                       <Link
                         href={link}
                         onClick={() => setOpen(false)}
                         className={cn(
                           "mt-2 inline-block text-xs underline underline-offset-2 font-medium",
-                          colorClass.split(" ")[0]
+                          textColor
                         )}
                       >
                         View →
                       </Link>
                     )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
 
           {/* Footer */}
@@ -186,7 +203,9 @@ export function NotificationBell() {
                 disabled={refreshing}
                 className="text-xs text-brand-600 hover:underline flex items-center gap-1 mx-auto"
               >
-                <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+                <RefreshCw
+                  className={cn("h-3 w-3", refreshing && "animate-spin")}
+                />
                 {refreshing ? "Checking..." : "Refresh alerts"}
               </button>
             </div>
