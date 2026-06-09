@@ -8,11 +8,11 @@ import Link from "next/link";
 
 const ALERT_LINKS: Record<string, string> = {
   cheque_due_soon: "/dashboard/cheques",
-  cheque_overdue:  "/dashboard/cheques",
-  low_stock:       "/dashboard/inventory",
-  out_of_stock:    "/dashboard/inventory",
-  uc_not_sent:     "/dashboard/uc-returns",
-  ceat_overdue:    "/dashboard/uc-returns",
+  cheque_overdue: "/dashboard/cheques",
+  low_stock: "/dashboard/inventory",
+  out_of_stock: "/dashboard/inventory",
+  uc_not_sent: "/dashboard/uc-returns",
+  ceat_overdue: "/dashboard/uc-returns",
 };
 
 interface Props {
@@ -22,10 +22,10 @@ interface Props {
 export function NotificationBell({ position = "sidebar" }: Props) {
   const { notifications, totalCount, hasNew, loading, markAsSeen, refreshAlerts } =
     useNotifications();
-  const [open, setOpen]             = useState(false);
-  const [expanded, setExpanded]     = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const panelRef                    = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -50,8 +50,8 @@ export function NotificationBell({ position = "sidebar" }: Props) {
 
   // Panel position: sidebar = fixed to right of screen, mobile = bottom-up
   const panelClass = position === "mobile"
-    ? "fixed bottom-16 left-2 right-2 z-50 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden"
-    : "fixed top-4 left-64 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden";
+    ? "fixed bottom-20 left-2 right-2 z-50 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden"
+    : "absolute left-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden";
 
   return (
     <div className="relative" ref={panelRef}>
@@ -136,10 +136,10 @@ export function NotificationBell({ position = "sidebar" }: Props) {
               notifications.map(alert => {
                 const colorClass =
                   ALERT_COLORS[alert.type] ?? "text-gray-700 bg-gray-50 border-gray-200";
-                const icon       = ALERT_ICONS[alert.type] ?? "🔔";
-                const link       = ALERT_LINKS[alert.type];
+                const icon = ALERT_ICONS[alert.type] ?? "🔔";
+                const link = ALERT_LINKS[alert.type];
                 const isExpanded = expanded === alert.type;
-                const textColor  = colorClass.split(" ")[0];
+                const textColor = colorClass.split(" ")[0];
 
                 return (
                   <div

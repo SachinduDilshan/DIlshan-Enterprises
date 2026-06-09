@@ -24,10 +24,10 @@ const NAV_ALL = [
 ];
 
 export function Sidebar() {
-  const pathname    = usePathname();
-  const { appUser } = useAuth();
-  const role        = appUser?.role ?? "sales_rep";
-  const navItems    = NAV_ALL.filter(item => item.roles.includes(role));
+  const pathname     = usePathname();
+  const { appUser }  = useAuth();
+  const role         = appUser?.role ?? "sales_rep";
+  const navItems     = NAV_ALL.filter(item => item.roles.includes(role));
   const canSeeAlerts = role === "admin" || role === "sales_rep";
 
   async function handleSignOut() {
@@ -38,12 +38,16 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-full flex-col border-r border-gray-100 bg-white">
       {/* Brand + notification bell */}
-      <div className="flex h-16 items-center justify-between px-5 border-b border-gray-100">
+      <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
         <div>
-          <span className="text-sm font-semibold text-gray-900 leading-tight block">Dilshan Enterprises</span>
-          <span className="text-xs text-gray-400 leading-tight block">Tire Distributors</span>
+          <span className="text-sm font-semibold text-gray-900 leading-tight block">
+            Dilshan Enterprises
+          </span>
+          <span className="text-xs text-gray-400 leading-tight block">
+            Tire Distributors
+          </span>
         </div>
-        {canSeeAlerts && <NotificationBell />}
+        {canSeeAlerts && <NotificationBell position="sidebar" />}
       </div>
 
       {/* Nav */}
@@ -51,12 +55,22 @@ export function Sidebar() {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
-            <Link key={href} href={href}
+            <Link
+              key={href}
+              href={href}
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                active ? "bg-brand-50 text-brand-800" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}>
-              <Icon className={cn("h-4 w-4 flex-shrink-0", active ? "text-brand-600" : "text-gray-400")} />
+                active
+                  ? "bg-brand-50 text-brand-800"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              )}
+            >
+              <Icon
+                className={cn(
+                  "h-4 w-4 flex-shrink-0",
+                  active ? "text-brand-600" : "text-gray-400"
+                )}
+              />
               <span className="flex-1">{label}</span>
             </Link>
           );
@@ -66,13 +80,15 @@ export function Sidebar() {
       {/* Bottom */}
       <div className="border-t border-gray-100 px-3 py-4 space-y-0.5">
         {role === "admin" && (
-          <Link href="/dashboard/settings"
+          <Link
+            href="/dashboard/settings"
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               pathname.startsWith("/dashboard/settings")
                 ? "bg-brand-50 text-brand-800"
                 : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-            )}>
+            )}
+          >
             <Settings className="h-4 w-4 text-gray-400" />
             Settings
           </Link>
@@ -82,11 +98,18 @@ export function Sidebar() {
             {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-medium text-gray-900">{appUser?.displayName ?? "User"}</p>
-            <p className="text-xs text-gray-500 capitalize">{appUser?.role?.replace("_", " ")}</p>
+            <p className="truncate text-sm font-medium text-gray-900">
+              {appUser?.displayName ?? "User"}
+            </p>
+            <p className="text-xs text-gray-500 capitalize">
+              {appUser?.role?.replace("_", " ")}
+            </p>
           </div>
-          <button onClick={handleSignOut} title="Sign out"
-            className="text-gray-400 hover:text-red-500 transition-colors">
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            className="text-gray-400 hover:text-red-500 transition-colors"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
