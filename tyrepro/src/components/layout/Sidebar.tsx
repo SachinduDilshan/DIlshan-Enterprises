@@ -6,10 +6,12 @@ import {
   LayoutDashboard, FileText, CalendarClock, Package,
   RotateCcw, Truck, Settings, LogOut, Store, BarChart3,
 } from "lucide-react";
+import { useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/ui/NotificationBell";
+import { LogoutConfirmDialog } from "@/components/ui/Logoutconfirmdialog";
 import { cn } from "@/lib/utils";
 
 const NAV_ALL = [
@@ -30,90 +32,103 @@ export function Sidebar() {
   const navItems     = NAV_ALL.filter(item => item.roles.includes(role));
   const canSeeAlerts = role === "admin" || role === "sales_rep";
 
-  async function handleSignOut() {
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  async function handleConfirmSignOut() {
+    setShowLogoutDialog(false);
     await signOut(auth);
     window.location.href = "/login";
   }
 
   return (
-    <aside className="flex h-full w-full flex-col border-r border-gray-100 bg-white">
-      {/* Brand + notification bell */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
-        <div>
-          <span className="text-sm font-semibold text-gray-900 leading-tight block">
-            Dilshan Enterprises
-          </span>
-          <span className="text-xs text-gray-400 leading-tight block">
-            Tire Distributors
-          </span>
+    <>
+      <aside className="flex h-full w-full flex-col border-r border-gray-100 bg-white">
+        {/* Brand + notification bell */}
+        <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
+          <div>
+            <span className="text-sm font-semibold text-gray-900 leading-tight block">
+              Dilshan Enterprises
+            </span>
+            <span className="text-xs text-gray-400 leading-tight block">
+              Tire Distributors
+            </span>
+          </div>
+          {canSeeAlerts && <NotificationBell position="sidebar" />}
         </div>
-        {canSeeAlerts && <NotificationBell position="sidebar" />}
-      </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          return (
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || pathname.startsWith(href + "/");
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-brand-50 text-brand-800"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "h-4 w-4 flex-shrink-0",
+                    active ? "text-brand-600" : "text-gray-400"
+                  )}
+                />
+                <span className="flex-1">{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Bottom */}
+        <div className="border-t border-gray-100 px-3 py-4 space-y-0.5">
+          {role === "admin" && (
             <Link
-              key={href}
-              href={href}
+              href="/dashboard/settings"
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                active
+                pathname.startsWith("/dashboard/settings")
                   ? "bg-brand-50 text-brand-800"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               )}
             >
-              <Icon
-                className={cn(
-                  "h-4 w-4 flex-shrink-0",
-                  active ? "text-brand-600" : "text-gray-400"
-                )}
-              />
-              <span className="flex-1">{label}</span>
+              <Settings className="h-4 w-4 text-gray-400" />
+              Settings
             </Link>
-          );
-        })}
-      </nav>
-
-      {/* Bottom */}
-      <div className="border-t border-gray-100 px-3 py-4 space-y-0.5">
-        {role === "admin" && (
-          <Link
-            href="/dashboard/settings"
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-              pathname.startsWith("/dashboard/settings")
-                ? "bg-brand-50 text-brand-800"
-                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-            )}
-          >
-            <Settings className="h-4 w-4 text-gray-400" />
-            Settings
-          </Link>
-        )}
-        <div className="flex items-center gap-3 px-3 py-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800 flex-shrink-0">
-            {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}
+          )}
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800 flex-shrink-0">
+              {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="truncate text-sm font-medium text-gray-900">
+                {appUser?.displayName ?? "User"}
+              </p>
+              <p className="text-xs text-gray-500 capitalize">
+                {appUser?.role?.replace("_", " ")}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowLogoutDialog(true)}
+              title="Sign out"
+              className="text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-medium text-gray-900">
-              {appUser?.displayName ?? "User"}
-            </p>
-            <p className="text-xs text-gray-500 capitalize">
-              {appUser?.role?.replace("_", " ")}
-            </p>
-          </div>
-          <button
-            onClick={handleSignOut}
-            title="Sign out"
-            className="text-gray-400 hover:text-red-500 transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      {/* Logout confirmation dialog — rendered outside aside to avoid clipping */}
+      <LogoutConfirmDialog
+        open={showLogoutDialog}
+        onConfirm={handleConfirmSignOut}
+        onCancel={() => setShowLogoutDialog(false)}
+        displayName={appUser?.displayName ?? undefined}
+      />
+    </>
   );
 }
