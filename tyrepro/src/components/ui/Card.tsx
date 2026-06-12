@@ -1,43 +1,37 @@
 import { cn } from "@/lib/utils";
 
 interface CardProps {
-  children: React.ReactNode;
+  children:  React.ReactNode;
   className?: string;
-  padding?: boolean;
+  padding?:  boolean;
 }
 
 export function Card({ children, className, padding = true }: CardProps) {
   return (
-    <div
-      className={cn(
-        "rounded-2xl border border-gray-100 bg-white",
-        padding && "p-4 md:p-5",
-        className
-      )}
-    >
+    <div className={cn(
+      "rounded-2xl border border-gray-100 bg-white",
+      padding && "p-4",
+      className
+    )}>
       {children}
     </div>
   );
 }
 
-export function CardHeader({
-  title,
-  subtitle,
-  action,
-}: {
-  title: string;
+interface CardHeaderProps {
+  title:    string;
   subtitle?: string;
-  action?: React.ReactNode;
-}) {
+  action?:  React.ReactNode;
+}
+
+export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="flex items-center justify-between mb-3">
       <div>
-        <h2 className="text-base font-medium text-gray-900">{title}</h2>
-        {subtitle && (
-          <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
-        )}
+        <p className="text-sm font-medium text-gray-900">{title}</p>
+        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action}
     </div>
   );
 }

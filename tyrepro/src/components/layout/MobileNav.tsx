@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FileText, Package, Truck, BarChart3, Bell,
+  LayoutDashboard, FileText, Package, Truck, BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationBell } from "@/components/ui/NotificationBell";
 
 export function MobileNav() {
@@ -30,21 +29,17 @@ export function MobileNav() {
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
-            <Link
-              key={href}
-              href={href}
+            <Link key={href} href={href}
               className={cn(
                 "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors",
                 active ? "text-brand-600" : "text-gray-400"
-              )}
-            >
+              )}>
               <Icon className="h-5 w-5" />
               {label}
             </Link>
           );
         })}
 
-        {/* Bell tab — same style as other tabs */}
         {canSeeAlerts && (
           <div className="flex flex-1 flex-col items-center gap-1 py-2 relative">
             <NotificationBell position="mobile" />

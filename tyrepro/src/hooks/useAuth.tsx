@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { AppUser } from "@/types";
 
@@ -57,7 +57,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [appUser, setAppUser]           = useState<AppUser | null>(null);
+  const [loading, setLoading]           = useState(true);
+
+  useEffect(() => {
+    let unsubProfile: (() => void) | undefined;
+
+    // Safety timeout — never let loading hang forever
+    const timeout = setTimeout(() => setLoading(false), 8000);
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+
+      if (unsubProfile) { unsubProfile(); unsubProfile = undefined; }
+
+      if (user) {
+        unsubProfile = onSnapshot(
+          doc(db, "users", user.uid),
+          (snap) => {
+            if (snap.exists()) {
+              setAppUser({ uid: user.uid, ...snap.data() } as AppUser);
+            } else {
+              setAppUser(null);
+            }
+            setLoading(false);
+            clearTimeout(timeout);
+          },
+          () => {
+            // Firestore read failed — don't hang forever
+            setAppUser(null);
+            setLoading(false);
+            clearTimeout(timeout);
+          }
+        );
+      } else {
+        setAppUser(null);
+        setLoading(false);
+        clearTimeout(timeout);
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      if (unsubProfile) unsubProfile();
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  return { firebaseUser, appUser, loading };
 }
 
 export function useRequireRole(role: AppUser["role"]) {
