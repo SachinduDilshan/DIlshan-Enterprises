@@ -106,7 +106,7 @@ function StatCard({ icon: Icon, bg, fg, label, value, change }: {
 export default function DashboardPage() {
   const { appUser } = useAuth();
   const role        = appUser?.role ?? "sales_rep";
-  const isDriver    = role === "driver";
+  const isDriver    = String(role) === "driver";
   const quickLinks  = ALL_QUICK_LINKS.filter(l => l.roles.includes(role));
 
   const [todaySales, setTodaySales]         = useState(0);

@@ -16,7 +16,7 @@ const ALERT_LINKS: Record<string, string> = {
 };
 
 interface Props {
-  position?: "sidebar" | "mobile";
+  position?: "sidebar" | "mobile" | "mobile-header";
 }
 
 export function NotificationBell({ position = "sidebar" }: Props) {
@@ -51,7 +51,9 @@ export function NotificationBell({ position = "sidebar" }: Props) {
   // Panel position: sidebar = fixed to right of screen, mobile = bottom-up
   const panelClass = position === "mobile"
     ? "fixed bottom-20 left-2 right-2 z-50 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden"
-    : "absolute left-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden";
+    : position === "mobile-header"
+      ? "fixed top-16 left-2 right-2 z-50 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden"
+      : "absolute left-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden";
 
   return (
     <div className="relative" ref={panelRef}>

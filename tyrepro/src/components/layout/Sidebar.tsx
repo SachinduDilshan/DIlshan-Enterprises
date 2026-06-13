@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,6 +11,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/ui/NotificationBell";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 
 const NAV_SECTIONS = [
@@ -44,6 +46,7 @@ export function Sidebar() {
   const { appUser }  = useAuth();
   const role         = appUser?.role ?? "sales_rep";
   const canSeeAlerts = role === "admin" || role === "sales_rep";
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   async function handleSignOut() {
     await signOut(auth);
@@ -109,12 +112,26 @@ export function Sidebar() {
               {appUser?.role?.replace("_", " ")}
             </p>
           </div>
-          <button onClick={handleSignOut} title="Sign out"
+          <button onClick={() => setShowLogoutConfirm(true)} title="Sign out"
             className="text-white/40 hover:text-white transition-colors">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
+
+      {/* Logout confirmation */}
+      {showLogoutConfirm && (
+        <ConfirmDialog
+          title="Sign out?"
+          description={`You're signed in as ${appUser?.displayName ?? "User"}. You'll need to log in again to access TyrePro.`}
+          confirmLabel="Sign out"
+          icon={LogOut}
+          iconBg="bg-danger-50"
+          iconColor="text-danger-500"
+          onConfirm={handleSignOut}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
+      )}
     </aside>
   );
 }

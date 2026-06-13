@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { MobileHeader } from "@/components/layout/MobileHeader";
 
 const DRIVER_ALLOWED = ["/dashboard", "/dashboard/dispatch"];
 
@@ -39,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar />
       </div>
       <main className="flex-1 md:ml-60 pb-20 md:pb-0">
+        <MobileHeader />
         {children}
       </main>
       <MobileNav />
