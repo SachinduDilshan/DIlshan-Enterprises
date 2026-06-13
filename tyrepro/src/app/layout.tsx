@@ -6,13 +6,13 @@ import { AuthProvider } from "@/hooks/useAuth";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Dilshan Enterprises — Tire Distributors",
   description: "Tire distribution management — Anuradhapura District",
-  manifest: "/manifest.json",
+  manifest:"/manifest.json",
 };
 
-export const viewport: Viewport = {
+export const viewport = {
   themeColor: "#534AB7",
   width: "device-width",
   initialScale: 1,

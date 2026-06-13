@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -13,18 +13,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { firebaseUser, appUser, loading } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     if (loading) return;
-    if (!firebaseUser) { router.replace("/login"); return; }
-    if (appUser && !appUser.active) { router.replace("/login"); return; }
-    if (appUser?.role === "driver") {
-      const allowed = DRIVER_ALLOWED.some(p => pathname === p || pathname.startsWith(p + "/"));
-      if (!allowed) router.replace("/dashboard/dispatch");
-    }
+    const t = setTimeout(() => {
+      if (!firebaseUser) { router.replace("/login"); return; }
+      if (appUser && !appUser.active) { router.replace("/login"); return; }
+      if (appUser?.role === "driver") {
+        const allowed = DRIVER_ALLOWED.some(p => pathname === p || pathname.startsWith(p + "/"));
+        if (!allowed) router.replace("/dashboard/dispatch");
+      }
+      setChecked(true);
+    }, 150);
+    return () => clearTimeout(t);
   }, [firebaseUser, appUser, loading, pathname, router]);
 
-  if (loading) {
+  if (loading || !checked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
@@ -36,11 +41,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex min-h-screen bg-gray-50 w-full max-w-full overflow-x-hidden">
         <div className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 md:z-30">
           <Sidebar />
         </div>
-        <main className="flex-1 md:ml-60 pb-20 md:pb-0">
+        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden md:ml-60 pb-20 md:pb-0">
           <MobileHeader />
           {children}
         </main>
