@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -14,6 +16,9 @@ export function MobileNav() {
   const { appUser }  = useAuth();
   const role         = appUser?.role ?? "sales_rep";
   const canSeeAlerts = role === "admin" || role === "sales_rep";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   const tabs = [
     { href: "/dashboard",           label: "Home",    icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
@@ -23,8 +28,11 @@ export function MobileNav() {
     { href: "/dashboard/reports",   label: "Reports", icon: BarChart3,       roles: ["admin","sales_rep"]          },
   ].filter(t => t.roles.includes(role));
 
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white pb-safe md:hidden">
+  const nav = (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-[100] border-t border-gray-100 bg-white pb-safe md:hidden"
+      style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}
+    >
       <div className="flex items-center">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -49,4 +57,8 @@ export function MobileNav() {
       </div>
     </nav>
   );
+
+  // Render via portal to escape any ancestor transform/overflow that breaks `fixed`
+  if (!mounted) return null;
+  return createPortal(nav, document.body);
 }

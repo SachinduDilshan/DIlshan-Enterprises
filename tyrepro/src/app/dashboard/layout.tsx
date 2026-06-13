@@ -35,15 +35,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!firebaseUser || !appUser) return null;
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <div className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0">
-        <Sidebar />
+    <>
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 md:z-30">
+          <Sidebar />
+        </div>
+        <main className="flex-1 md:ml-60 pb-20 md:pb-0">
+          <MobileHeader />
+          {children}
+        </main>
       </div>
-      <main className="flex-1 md:ml-60 pb-20 md:pb-0">
-        <MobileHeader />
-        {children}
-      </main>
       <MobileNav />
-    </div>
+    </>
   );
 }

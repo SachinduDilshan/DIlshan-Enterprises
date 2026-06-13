@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { AppUser } from "@/types";
 
@@ -25,38 +25,6 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-
-      if (user) {
-        // Fetch the role and profile from Firestore /users/{uid}
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists()) {
-          setAppUser({ uid: snap.id, ...snap.data() } as AppUser);
-        }
-      } else {
-        setAppUser(null);
-      }
-
-      setLoading(false);
-    });
-
-    return unsub;
-  }, []);
-
-  return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [appUser, setAppUser]           = useState<AppUser | null>(null);
   const [loading, setLoading]           = useState(true);
@@ -76,11 +44,7 @@ export function useAuth() {
         unsubProfile = onSnapshot(
           doc(db, "users", user.uid),
           (snap) => {
-            if (snap.exists()) {
-              setAppUser({ uid: user.uid, ...snap.data() } as AppUser);
-            } else {
-              setAppUser(null);
-            }
+            setAppUser(snap.exists() ? ({ uid: user.uid, ...snap.data() } as AppUser) : null);
             setLoading(false);
             clearTimeout(timeout);
           },
@@ -105,7 +69,15 @@ export function useAuth() {
     };
   }, []);
 
-  return { firebaseUser, appUser, loading };
+  return (
+    <AuthContext.Provider value={{ firebaseUser, appUser, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
 }
 
 export function useRequireRole(role: AppUser["role"]) {
