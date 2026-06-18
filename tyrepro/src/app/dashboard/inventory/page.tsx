@@ -3,27 +3,26 @@
 import { useState, useEffect } from "react";
 import { useStock } from "@/hooks/useStock";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import {
   AlertTriangle, ArrowLeftRight, Package,
-  Plus, Pencil, X, Check, Trash2,
+  Plus, Minus, Pencil, X, Check, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Stock, Product, TyreType } from "@/types";
 import {
   addDoc, serverTimestamp, doc, updateDoc,
   runTransaction, collection, query, orderBy,
-  onSnapshot, increment, setDoc, deleteDoc,
+  onSnapshot, deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
-
-// ── Constants ─────────────────────────────────────────────
 
 const WAREHOUSES = [
   { value: "",             label: "All warehouses" },
@@ -44,21 +43,22 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   );
 }
 
-// ── Stock row with delete button ──────────────────────────
+// ── Stock row ─────────────────────────────────────────────
 
-function StockRow({ item, canEdit, onDelete }: { item: Stock; canEdit: boolean; onDelete: (item: Stock) => void }) {
+function StockRow({ item, canEdit, onDelete }: {
+  item: Stock; canEdit: boolean; onDelete: (item: Stock) => void;
+}) {
   const isLow = item.qty <= item.reorderLevel;
   const isOut = item.qty === 0;
-
   return (
     <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
           {isOut  && <Badge variant="danger">Out of stock</Badge>}
           {!isOut && isLow && <Badge variant="warning">Low</Badge>}
         </div>
-        <div className="text-xs text-gray-400 mt-0.5">{item.productSku}</div>
+        <div className="text-xs text-gray-400 mt-0.5 truncate">{item.productSku}</div>
         <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -67,11 +67,8 @@ function StockRow({ item, canEdit, onDelete }: { item: Stock; canEdit: boolean; 
           <div className="text-xs text-gray-400">units</div>
         </div>
         {canEdit && (
-          <button
-            onClick={() => onDelete(item)}
-            title="Delete stock record"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
-          >
+          <button onClick={() => onDelete(item)} title="Delete stock record"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors">
             <Trash2 className="h-4 w-4 text-gray-400" />
           </button>
         )}
@@ -79,9 +76,6 @@ function StockRow({ item, canEdit, onDelete }: { item: Stock; canEdit: boolean; 
     </div>
   );
 }
-
-// ── Delete confirm ────────────────────────────────────────
-// (reusing DeleteConfirmDialog from components/ui)
 
 // ── Add/Edit product modal ────────────────────────────────
 
@@ -91,7 +85,7 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
   const [customBrand, setCustom] = useState("");
   const [size, setSize]          = useState(existing?.size ?? "");
   const [type, setType]          = useState<TyreType>(existing?.type ?? "bike");
-  const [tubeType, setTubeType]  = useState<"tube_type" | "tubeless">("tube_type");
+  const [tubeType, setTubeType]  = useState<"tube_type"|"tubeless">("tube_type");
   const [unitPrice, setPrice]    = useState(existing?.unitPrice ?? 0);
   const [saving, setSaving]      = useState(false);
   const [error, setError]        = useState("");
@@ -105,7 +99,7 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
     const b    = brand === "Other" ? customBrand : brand;
     const t    = type === "bike" ? "BK" : "3W";
     const tube = tubeType === "tubeless" ? "TL" : "TT";
-    return `${size.replace(/[^0-9./]/g, "")}-${b.toUpperCase().slice(0, 4)}-${t}-${tube}`.replace(/\s/g, "");
+    return `${size.replace(/[^0-9./]/g,"")}-${b.toUpperCase().slice(0,4)}-${t}-${tube}`.replace(/\s/g,"");
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -119,9 +113,7 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
       if (existing) {
         await updateDoc(doc(productsCol, existing.id), { name: finalName, brand: finalBrand, size, type, unitPrice, updatedAt: serverTimestamp() });
       } else {
-        await addDoc(productsCol, {
-          sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp(),
-        });
+        await addDoc(productsCol, { sku, name: finalName, brand: finalBrand, type, size, unitPrice, active: true, createdAt: serverTimestamp() });
       }
       onClose();
     } catch (err: any) { setError(err.message); }
@@ -129,73 +121,87 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader
-          title={existing ? "Edit product" : "Add new product"}
-          action={<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>}
-        />
-        <form onSubmit={handleSave} className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
-            <div className="flex gap-2">
-              {(["bike", "three_wheeler"] as TyreType[]).map(t => (
-                <button key={t} type="button" onClick={() => setType(t)}
-                  className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                    type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                  {t === "bike" ? "🏍 Bike" : "🛺 Three-wheeler"}
-                </button>
-              ))}
-            </div>
+    <Modal title={existing ? "Edit product" : "Add new product"} onClose={onClose} size="md">
+      <form onSubmit={handleSave} className="space-y-3">
+        {/* Tyre type */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
+          <div className="flex gap-2">
+            {(["bike","three_wheeler"] as TyreType[]).map(t => (
+              <button key={t} type="button" onClick={() => setType(t)}
+                className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
+                  type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                {t === "bike" ? "🏍 Bike" : "🛺 Three-wheeler"}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tube type *</label>
-            <div className="flex gap-2">
-              {(["tube_type", "tubeless"] as const).map(t => (
-                <button key={t} type="button" onClick={() => setTubeType(t)}
-                  className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                    tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                  {t === "tube_type" ? "Tube type" : "Tubeless"}
-                </button>
-              ))}
-            </div>
+        </div>
+
+        {/* Tube type */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tube type *</label>
+          <div className="flex gap-2">
+            {(["tube_type","tubeless"] as const).map(t => (
+              <button key={t} type="button" onClick={() => setTubeType(t)}
+                className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
+                  tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                {t === "tube_type" ? "Tube type" : "Tubeless"}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Brand *</label>
-            <div className="flex flex-wrap gap-2">
-              {BRANDS.map(b => (
-                <button key={b} type="button" onClick={() => setBrand(b)}
-                  className={cn("rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
-                    brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                  {b}
-                </button>
-              ))}
-            </div>
-            {brand === "Other" && (
-              <input value={customBrand} onChange={e => setCustom(e.target.value)} placeholder="Enter brand name"
-                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
-            )}
+        </div>
+
+        {/* Brand */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Brand *</label>
+          <div className="flex flex-wrap gap-2">
+            {BRANDS.map(b => (
+              <button key={b} type="button" onClick={() => setBrand(b)}
+                className={cn("rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
+                  brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                {b}
+              </button>
+            ))}
           </div>
-          <Input label="Tyre size *" placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"} value={size} onChange={e => setSize(e.target.value)} />
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Display name <span className="text-gray-400 font-normal">(auto-filled)</span></label>
-            <input value={name || buildName()} onChange={e => setName(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
-          </div>
-          <Input label="Unit price (Rs) *" type="number" min={1} value={unitPrice || ""} onChange={e => setPrice(parseFloat(e.target.value) || 0)} placeholder="e.g. 2800" />
-          {!existing && (
-            <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              SKU: <span className="font-mono font-medium text-gray-700">{buildSku()}</span>
-            </div>
+          {brand === "Other" && (
+            <input value={customBrand} onChange={e => setCustom(e.target.value)}
+              placeholder="Enter brand name"
+              className="mt-2 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
           )}
-          {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" type="submit" loading={saving}>{existing ? "Save changes" : "Add product"}</Button>
+        </div>
+
+        <Input label="Tyre size *"
+          placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"}
+          value={size} onChange={e => setSize(e.target.value)} />
+
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">
+            Display name <span className="text-gray-400 font-normal">(auto-filled)</span>
+          </label>
+          <input value={name || buildName()} onChange={e => setName(e.target.value)}
+            className="w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
+        </div>
+
+        <Input label="Unit price (Rs) *" type="number" min={1}
+          value={unitPrice || ""} onChange={e => setPrice(parseFloat(e.target.value) || 0)}
+          placeholder="e.g. 2800" />
+
+        {!existing && (
+          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            SKU: <span className="font-mono font-medium text-gray-700">{buildSku()}</span>
           </div>
-        </form>
-      </Card>
-    </div>
+        )}
+
+        {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
+
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" type="submit" loading={saving}>
+            {existing ? "Save changes" : "Add product"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -208,7 +214,7 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
   const [reorder, setReorder]     = useState(10);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
-  const selectedProduct           = products.find(p => p.id === productId);
+  const selectedProduct = products.find(p => p.id === productId);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -218,31 +224,20 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
       const stockDocId = `${warehouseId}_${productId}`;
       const wh         = WAREHOUSES.find(w => w.value === warehouseId)!;
       const stockRef   = doc(stockCol, stockDocId);
-
-      // Use a transaction so qty is always a real number (never a sentinel)
-      await runTransaction(db, async (tx) => {
+      await runTransaction(db, async tx => {
         const existing = await tx.get(stockRef);
         if (existing.exists()) {
-          // Doc already exists — add to current qty
-          const currentQty = (existing.data() as Stock).qty ?? 0;
           tx.update(stockRef, {
-            qty:          currentQty + qty,
+            qty:          (existing.data() as Stock).qty + qty,
             reorderLevel: reorder,
             updatedAt:    serverTimestamp(),
           });
         } else {
-          // New stock doc — create with all fields and a plain number
           tx.set(stockRef, {
-            id:           stockDocId,
-            warehouseId,
-            warehouseName: wh.label,
-            productId,
-            productName:  selectedProduct?.name ?? "",
-            productSku:   selectedProduct?.sku  ?? "",
-            productType:  selectedProduct?.type ?? "bike",
-            qty,          // plain number — not increment()
-            reorderLevel: reorder,
-            updatedAt:    serverTimestamp(),
+            id: stockDocId, warehouseId, warehouseName: wh.label,
+            productId, productName: selectedProduct?.name ?? "",
+            productSku: selectedProduct?.sku ?? "", productType: selectedProduct?.type ?? "bike",
+            qty, reorderLevel: reorder, updatedAt: serverTimestamp(),
           });
         }
       });
@@ -252,24 +247,25 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-sm rounded-t-3xl md:rounded-2xl">
-        <CardHeader title="Add stock to warehouse"
-          action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
-        <form onSubmit={handleSave} className="space-y-3">
-          <Select label="Product *" value={productId} onChange={e => setProductId(e.target.value)}
-            placeholder="Select product..." options={products.map(p => ({ value: p.id, label: p.name }))} />
-          <Select label="Warehouse *" value={warehouseId} onChange={e => setWh(e.target.value)} options={WAREHOUSES.slice(1)} />
-          <Input label="Quantity *" type="number" min={1} value={qty || ""} onChange={e => setQty(parseInt(e.target.value) || 0)} placeholder="e.g. 50" />
-          <Input label="Reorder alert level" type="number" min={1} value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
-          {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" type="submit" loading={saving}>Add stock</Button>
-          </div>
-        </form>
-      </Card>
-    </div>
+    <Modal title="Add stock to warehouse" onClose={onClose} size="sm">
+      <form onSubmit={handleSave} className="space-y-3">
+        <Dropdown label="Product *" value={productId} onChange={setProductId}
+          placeholder="Select product..."
+          options={products.map(p => ({ value: p.id, label: p.name }))} />
+        <Dropdown label="Warehouse *" value={warehouseId} onChange={setWh}
+          options={WAREHOUSES.slice(1)} />
+        <Input label="Quantity *" type="number" min={1}
+          value={qty || ""} onChange={e => setQty(parseInt(e.target.value) || 0)}
+          placeholder="e.g. 50" />
+        <Input label="Reorder alert level" type="number" min={1}
+          value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
+        {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" type="submit" loading={saving}>Add stock</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -283,7 +279,6 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   const [qty, setQty]           = useState(1);
   const [submitting, setSub]    = useState(false);
   const [error, setError]       = useState("");
-
   const fromStock     = stock.filter(s => s.warehouseId === fromWh);
   const selectedStock = fromStock.find(s => s.productId === productId);
 
@@ -300,7 +295,6 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
         productId: selectedStock.productId, productName: selectedStock.productName,
         productSku: selectedStock.productSku, qty, status: "completed",
         createdBy: appUser?.uid ?? "", transferDate: serverTimestamp(), completedAt: serverTimestamp(),
-        id: ""
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
       const toDocId   = `${toWh}_${selectedStock.productId}`;
@@ -316,7 +310,11 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
         if (toSnap.exists()) {
           tx.update(toRef, { qty: (toSnap.data() as Stock).qty + qty, updatedAt: serverTimestamp() });
         } else {
-          tx.set(toRef, { ...fromSnap.data(), id: toDocId, warehouseId: toWh, warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh, qty, updatedAt: serverTimestamp() });
+          tx.set(toRef, {
+            ...fromSnap.data(), id: toDocId, warehouseId: toWh,
+            warehouseName: WAREHOUSES.find(w => w.value === toWh)?.label ?? toWh,
+            qty, updatedAt: serverTimestamp(),
+          });
         }
       });
       onClose();
@@ -325,25 +323,29 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-md rounded-t-3xl md:rounded-2xl">
-        <CardHeader title="Transfer stock between warehouses"
-          action={<button onClick={onClose} className="text-gray-400 text-xl">✕</button>} />
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Select label="From warehouse" value={fromWh} onChange={e => { setFromWh(e.target.value); setProduct(""); }} options={WAREHOUSES.slice(1)} />
-          <Select label="To warehouse"   value={toWh}   onChange={e => setToWh(e.target.value)}   options={WAREHOUSES.slice(1)} />
-          <Select label="Product (from warehouse stock)" value={productId} onChange={e => setProduct(e.target.value)} placeholder="Select product..."
-            options={fromStock.map(s => ({ value: s.productId, label: `${s.productName} (${s.qty} available)` }))} />
-          <Input label="Quantity" type="number" min={1} max={selectedStock?.qty} value={qty}
-            onChange={e => setQty(Number(e.target.value))} hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
-          {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={onClose} type="button">Cancel</Button>
-            <Button className="flex-1" type="submit" loading={submitting} disabled={!productId}>Transfer</Button>
-          </div>
-        </form>
-      </Card>
-    </div>
+    <Modal title="Transfer stock" subtitle="Move stock between warehouses" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <Dropdown label="From warehouse" value={fromWh}
+          onChange={v => { setFromWh(v); setProduct(""); }}
+          options={WAREHOUSES.slice(1)} />
+        <Dropdown label="To warehouse" value={toWh} onChange={setToWh}
+          options={WAREHOUSES.slice(1)} />
+        <Dropdown label="Product" value={productId} onChange={setProduct}
+          placeholder="Select product..."
+          options={fromStock.map(s => ({
+            value: s.productId,
+            label: `${s.productName} (${s.qty} available)`,
+          }))} />
+        <Input label="Quantity" type="number" min={1} max={selectedStock?.qty}
+          value={qty} onChange={e => setQty(Number(e.target.value))}
+          hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
+        {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        <div className="flex gap-3 pt-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose} type="button">Cancel</Button>
+          <Button className="flex-1" type="submit" loading={submitting} disabled={!productId}>Transfer</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -359,7 +361,7 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab]           = useState<InventoryTab>("stock");
   const [warehouseId, setWarehouseId]       = useState("");
   const [search, setSearch]                 = useState("");
-  const [tyreTab, setTyreTab]               = useState<"all" | "bike" | "three_wheeler">("all");
+  const [tyreTab, setTyreTab]               = useState<"all"|"bike"|"three_wheeler">("all");
   const [showTransfer, setShowTransfer]     = useState(false);
   const [showAddStock, setShowAddStock]     = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -368,7 +370,6 @@ export default function InventoryPage() {
   const [deleteStock, setDeleteStock]       = useState<Stock | undefined>();
 
   const { stock, lowStockItems, loading: stockLoading } = useStock({ warehouseId: warehouseId || undefined });
-
   const [products, setProducts]    = useState<Product[]>([]);
   const [prodLoading, setProdLoad] = useState(true);
 
@@ -395,7 +396,8 @@ export default function InventoryPage() {
   }
 
   const filteredStock = stock.filter(s => {
-    const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) || s.productSku?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
+                        s.productSku?.toLowerCase().includes(search.toLowerCase());
     const matchTab    = tyreTab === "all" || s.productType === tyreTab;
     return matchSearch && matchTab;
   });
@@ -406,32 +408,39 @@ export default function InventoryPage() {
   }, {});
 
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.sku?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+    <div className="p-4 md:p-6 max-w-2xl mx-auto w-full max-w-full">
+
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-medium text-gray-900">Inventory</h1>
-          <p className="text-sm text-gray-500">{stock.length} SKUs · {products.filter(p => p.active).length} products</p>
+          <p className="text-sm text-gray-500 truncate">
+            {stock.length} SKUs · {products.filter(p => p.active).length} products
+          </p>
         </div>
         {canEdit && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             {activeTab === "stock" && (
               <>
                 <Button size="sm" variant="secondary" onClick={() => setShowAddStock(true)} className="gap-1.5">
-                  <Plus className="h-4 w-4" /> Add stock
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Add stock</span>
                 </Button>
                 <Button size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
-                  <ArrowLeftRight className="h-4 w-4" /> Transfer
+                  <ArrowLeftRight className="h-4 w-4" />
+                  <span className="hidden sm:inline">Transfer</span>
                 </Button>
               </>
             )}
             {activeTab === "products" && (
               <Button size="sm" onClick={() => setShowAddProduct(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" /> Add product
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add product</span>
               </Button>
             )}
           </div>
@@ -440,7 +449,7 @@ export default function InventoryPage() {
 
       {/* Main tabs */}
       <div className="mb-4 flex rounded-xl border border-gray-200 overflow-hidden">
-        {(["stock", "products"] as InventoryTab[]).map(t => (
+        {(["stock","products"] as InventoryTab[]).map(t => (
           <button key={t} onClick={() => { setActiveTab(t); setSearch(""); }}
             className={cn("flex-1 py-2.5 text-sm font-medium transition-colors",
               activeTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
@@ -464,18 +473,28 @@ export default function InventoryPage() {
           {lowStockItems.length > 0 && (
             <div className="mb-4 flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-amber-800">{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} low on stock</p>
-                <p className="text-xs text-amber-700 mt-0.5">{lowStockItems.map(s => s.productName).join(", ")}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-amber-800">
+                  {lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} low on stock
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5 truncate">
+                  {lowStockItems.map(s => s.productName).join(", ")}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Warehouse + type filter */}
-          <div className="mb-4 flex gap-2">
-            <Select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} options={WAREHOUSES} className="flex-1" />
-            <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden text-sm">
-              {(["all", "bike", "three_wheeler"] as const).map(t => (
+          {/* Filters row */}
+          <div className="mb-4 flex gap-2 items-center">
+            <div className="flex-1 min-w-0">
+              <Dropdown
+                value={warehouseId}
+                onChange={setWarehouseId}
+                options={WAREHOUSES}
+              />
+            </div>
+            <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden text-sm flex-shrink-0">
+              {(["all","bike","three_wheeler"] as const).map(t => (
                 <button key={t} onClick={() => setTyreTab(t)}
                   className={cn("px-3 py-2 font-medium transition-colors",
                     tyreTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
@@ -485,49 +504,55 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {stockLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
+          {stockLoading && (
+            <div className="flex justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
+            </div>
+          )}
 
           {!stockLoading && filteredStock.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">No stock found</p>
-              {canEdit && <Button size="sm" className="mt-4" onClick={() => setShowAddStock(true)}>Add stock</Button>}
+              {canEdit && (
+                <Button size="sm" className="mt-4" onClick={() => setShowAddStock(true)}>
+                  Add stock
+                </Button>
+              )}
             </Card>
-          )}
-
-          {/* Legend for delete button */}
-          {canEdit && filteredStock.length > 0 && (
-            <div className="mb-2 flex items-center gap-2 text-xs text-gray-400">
-              <span className="flex items-center gap-1">
-                <span className="flex h-5 w-5 items-center justify-center rounded bg-red-50 border border-red-200">
-                  <Trash2 className="h-3 w-3 text-red-400" />
-                </span>
-                Delete stock record
-              </span>
-            </div>
           )}
 
           {!stockLoading && (
             warehouseId
-              ? <Card padding={false}>
+              ? (
+                <Card padding={false}>
                   <div className="px-4 py-3 border-b border-gray-50">
-                    <span className="text-sm font-medium text-gray-700">{WAREHOUSES.find(w => w.value === warehouseId)?.label}</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {WAREHOUSES.find(w => w.value === warehouseId)?.label}
+                    </span>
                   </div>
                   <div className="px-4">
-                    {filteredStock.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />)}
+                    {filteredStock.map(item => (
+                      <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />
+                    ))}
                   </div>
                 </Card>
+              )
               : Object.entries(byWarehouse).map(([whName, items]) => (
-                  <Card key={whName} padding={false} className="mb-4">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                      <span className="text-sm font-medium text-gray-700">{whName}</span>
-                      <span className="text-xs text-gray-400">{items.reduce((s, i) => s + i.qty, 0)} units total</span>
-                    </div>
-                    <div className="px-4">
-                      {items.map(item => <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />)}
-                    </div>
-                  </Card>
-                ))
+                <Card key={whName} padding={false} className="mb-4">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                    <span className="text-sm font-medium text-gray-700">{whName}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {items.reduce((s, i) => s + i.qty, 0)} units total
+                    </span>
+                  </div>
+                  <div className="px-4">
+                    {items.map(item => (
+                      <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />
+                    ))}
+                  </div>
+                </Card>
+              ))
           )}
         </>
       )}
@@ -535,50 +560,68 @@ export default function InventoryPage() {
       {/* ── PRODUCTS TAB ── */}
       {activeTab === "products" && (
         <>
-          {prodLoading && <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
+          {prodLoading && (
+            <div className="flex justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
+            </div>
+          )}
 
           {!prodLoading && filteredProducts.length === 0 && (
             <Card className="flex flex-col items-center py-12 text-center">
               <Package className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">No products yet</p>
-              {canEdit && <Button size="sm" className="mt-4" onClick={() => setShowAddProduct(true)}>Add first product</Button>}
+              {canEdit && (
+                <Button size="sm" className="mt-4" onClick={() => setShowAddProduct(true)}>
+                  Add first product
+                </Button>
+              )}
             </Card>
           )}
 
-          <Card padding={false}>
-            {filteredProducts.map((p, i) => (
-              <div key={p.id} className={`flex items-center gap-3 px-4 py-3 ${i < filteredProducts.length - 1 ? "border-b border-gray-50" : ""}`}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                    <Badge variant={p.type === "bike" ? "info" : "default"}>{p.type === "bike" ? "Bike" : "3-Wheeler"}</Badge>
-                    {!p.active && <Badge variant="danger">Inactive</Badge>}
+          {!prodLoading && filteredProducts.length > 0 && (
+            <Card padding={false}>
+              {filteredProducts.map((p, i) => (
+                <div key={p.id}
+                  className={cn("flex items-center gap-3 px-4 py-3",
+                    i < filteredProducts.length - 1 && "border-b border-gray-50")}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                      <Badge variant={p.type === "bike" ? "info" : "default"}>
+                        {p.type === "bike" ? "Bike" : "3-Wheeler"}
+                      </Badge>
+                      {!p.active && <Badge variant="danger">Inactive</Badge>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                      {p.sku} · {p.brand} · Rs {p.unitPrice?.toLocaleString()}
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{p.sku} · {p.brand} · Rs {p.unitPrice?.toLocaleString()}</p>
-                </div>
-                {canEdit && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => setEditProduct(p)}
-                      className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors" title="Edit">
-                      <Pencil className="h-3.5 w-3.5 text-gray-500" />
-                    </button>
-                    <button onClick={() => toggleProductActive(p)}
-                      className={cn("h-7 w-7 flex items-center justify-center rounded-lg border transition-colors",
-                        p.active ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50" : "border-green-300 bg-green-50")}
-                      title={p.active ? "Deactivate" : "Activate"}>
-                      {p.active ? <X className="h-3.5 w-3.5 text-gray-400" /> : <Check className="h-3.5 w-3.5 text-green-600" />}
-                    </button>
-                    {isAdmin && (
-                      <button onClick={() => setDeleteProduct(p)}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors" title="Delete">
-                        <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                  {canEdit && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => setEditProduct(p)} title="Edit"
+                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <Pencil className="h-3.5 w-3.5 text-gray-500" />
                       </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </Card>
+                      <button onClick={() => toggleProductActive(p)}
+                        title={p.active ? "Deactivate" : "Activate"}
+                        className={cn("h-7 w-7 flex items-center justify-center rounded-lg border transition-colors",
+                          p.active ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50" : "border-green-300 bg-green-50")}>
+                        {p.active
+                          ? <X className="h-3.5 w-3.5 text-gray-400" />
+                          : <Check className="h-3.5 w-3.5 text-green-600" />}
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => setDeleteProduct(p)} title="Delete"
+                          className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors">
+                          <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Card>
+          )}
         </>
       )}
 

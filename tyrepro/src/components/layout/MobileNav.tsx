@@ -12,33 +12,37 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
 export function MobileNav() {
-  const pathname    = usePathname();
+  const pathname = usePathname();
   const { appUser } = useAuth();
-  const role        = appUser?.role ?? "sales_rep";
-  const [mounted, setMounted]   = useState(false);
+  const role = appUser?.role ?? "sales_rep";
+  const [mounted, setMounted] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
   // Primary 5 tabs (no Alerts — bell already lives in top header)
   const tabs = [
-    { href: "/dashboard",           label: "Home",    icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
-    { href: "/dashboard/invoices",  label: "Invoice", icon: FileText,        roles: ["admin","sales_rep"]          },
-    { href: "/dashboard/inventory", label: "Stock",   icon: Package,         roles: ["admin","sales_rep"]          },
-    { href: "/dashboard/dispatch",  label: "Dispatch",icon: Truck,           roles: ["admin","sales_rep","driver"] },
+    { href: "/dashboard", label: "Home", icon: LayoutDashboard, roles: ["admin", "sales_rep", "driver"] },
+    { href: "/dashboard/invoices", label: "Invoice", icon: FileText, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/inventory", label: "Inventory", icon: Package, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/dispatch", label: "Dispatch", icon: Truck, roles: ["admin", "sales_rep", "driver"] },
   ].filter(t => t.roles.includes(role));
 
   // "More" menu items
   const moreItems = [
-    { href: "/dashboard/shops",      label: "Shops",      icon: Store,         roles: ["admin","sales_rep"] },
-    { href: "/dashboard/cheques",    label: "Cheques",    icon: CalendarClock, roles: ["admin","sales_rep"] },
-    { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw,     roles: ["admin","sales_rep"] },
-    { href: "/dashboard/reports",    label: "Reports",    icon: BarChart3,     roles: ["admin","sales_rep"] },
-    { href: "/dashboard/settings",   label: "Settings",   icon: Settings,      roles: ["admin"]              },
+    { href: "/dashboard/shops", label: "Shops", icon: Store, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/cheques", label: "Cheques", icon: CalendarClock, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/reports", label: "Reports", icon: BarChart3, roles: ["admin", "sales_rep"] },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: ["admin"] },
   ].filter(t => t.roles.includes(role));
 
-  const hasMore     = moreItems.length > 0;
-  const moreActive  = moreItems.some(m => pathname === m.href || pathname.startsWith(m.href + "/"));
+  const hasMore = moreItems.length > 0;
+  const moreActive = moreItems.some(m =>
+    m.href === "/dashboard"
+      ? pathname === m.href
+      : pathname === m.href || pathname.startsWith(m.href + "/")
+  );
 
   const nav = (
     <>
@@ -48,7 +52,9 @@ export function MobileNav() {
       >
         <div className="flex items-center">
           {tabs.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
+            const active = href === "/dashboard"
+              ? pathname === href
+              : pathname === href || pathname.startsWith(href + "/");
             return (
               <Link key={href} href={href}
                 className={cn(
@@ -94,7 +100,9 @@ export function MobileNav() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               {moreItems.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || pathname.startsWith(href + "/");
+                const active = href === "/dashboard"
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link
                     key={href}

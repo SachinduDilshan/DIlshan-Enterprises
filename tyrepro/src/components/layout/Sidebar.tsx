@@ -18,33 +18,33 @@ const NAV_SECTIONS = [
   {
     label: "Main",
     items: [
-      { href: "/dashboard",          label: "Dashboard", icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
-      { href: "/dashboard/shops",    label: "Shops",     icon: Store,           roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/invoices", label: "Invoices",  icon: FileText,        roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/cheques",  label: "Cheques",   icon: CalendarClock,   roles: ["admin","sales_rep"]          },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "sales_rep", "driver"] },
+      { href: "/dashboard/shops", label: "Shops", icon: Store, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/invoices", label: "Invoices", icon: FileText, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/cheques", label: "Cheques", icon: CalendarClock, roles: ["admin", "sales_rep"] },
     ],
   },
   {
     label: "Operations",
     items: [
-      { href: "/dashboard/inventory",  label: "Inventory",  icon: Package,     roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw,   roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/dispatch",   label: "Dispatch",   icon: Truck,       roles: ["admin","sales_rep","driver"] },
+      { href: "/dashboard/inventory", label: "Inventory", icon: Package, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/dispatch", label: "Dispatch", icon: Truck, roles: ["admin", "sales_rep", "driver"] },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "/dashboard/reports",  label: "Reports",  icon: BarChart3, roles: ["admin","sales_rep"] },
-      { href: "/dashboard/settings", label: "Settings", icon: Settings,  roles: ["admin"]             },
+      { href: "/dashboard/reports", label: "Reports", icon: BarChart3, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: ["admin"] },
     ],
   },
 ];
 
 export function Sidebar() {
-  const pathname     = usePathname();
-  const { appUser }  = useAuth();
-  const role         = appUser?.role ?? "sales_rep";
+  const pathname = usePathname();
+  const { appUser } = useAuth();
+  const role = appUser?.role ?? "sales_rep";
   const canSeeAlerts = role === "admin" || role === "sales_rep";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -79,7 +79,9 @@ export function Sidebar() {
                 {section.label}
               </p>
               {items.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || pathname.startsWith(href + "/");
+                const active = href === "/dashboard"
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link key={href} href={href}
                     className={cn(
