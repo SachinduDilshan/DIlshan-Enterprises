@@ -26,7 +26,7 @@ import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections
 
 const WAREHOUSES = [
   { value: "",             label: "All warehouses" },
-  { value: "kurunegala",   label: "Kurunegala"     },
+  { value: "kurunegala",   label: "Polonnaruwa"     },
   { value: "anuradhapura", label: "Anuradhapura"   },
 ];
 const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other"];

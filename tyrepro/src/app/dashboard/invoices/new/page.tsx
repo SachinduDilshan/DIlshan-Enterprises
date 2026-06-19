@@ -146,7 +146,7 @@ export default function NewInvoicePage() {
           shopId: selectedShop.id,
           shopName: selectedShop.name,
           warehouseId: selectedShop.assignedWarehouseId,
-          warehouseName: selectedShop.assignedWarehouseId === "kurunegala" ? "Kurunegala" : "Anuradhapura",
+          warehouseName: selectedShop.assignedWarehouseId === "polonnaruwa" ? "Polonnaruwa" : "Anuradhapura",
           createdBy: appUser!.uid,
           paymentType,
           totalAmount: total,
@@ -248,7 +248,7 @@ export default function NewInvoicePage() {
                 <span>Owner</span><span className="font-medium">{selectedShop.ownerName}</span>
               </div>
               <div className="flex justify-between">
-                <span>Warehouse</span><span className="font-medium capitalize">{selectedShop.assignedWarehouseId}</span>
+                <span>Warehouse</span><span className="font-medium capitalize">{selectedShop.assignedWarehouseId === "polonnaruwa" ? "Polonnaruwa" : "Anuradhapura"}</span>
               </div>
               {selectedShop.outstandingBalance > 0 && (
                 <div className="flex justify-between">

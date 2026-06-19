@@ -16,7 +16,7 @@ import type { StockTransfer } from "@/types";
 
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
-  { value: "kurunegala", label: "Kurunegala" },
+  { value: "polonnaruwa", label: "Polonnaruwa" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 

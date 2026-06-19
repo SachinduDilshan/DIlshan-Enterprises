@@ -12,7 +12,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 const WAREHOUSES = [
-  { value: "kurunegala",   label: "Kurunegala"   },
+  { value: "polonnaruwa",   label: "Polonnaruwa"   },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 
