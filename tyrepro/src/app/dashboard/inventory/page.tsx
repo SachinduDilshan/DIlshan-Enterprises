@@ -25,16 +25,16 @@ import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
 
 const WAREHOUSES = [
-  { value: "",             label: "All warehouses" },
-  { value: "kurunegala",   label: "Polonnaruwa"     },
-  { value: "anuradhapura", label: "Anuradhapura"   },
+  { value: "", label: "All warehouses" },
+  { value: "kurunegala", label: "Polonnaruwa" },
+  { value: "anuradhapura", label: "Anuradhapura" },
 ];
 const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other"];
 
 // ── Stock bar ─────────────────────────────────────────────
 
 function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) {
-  const pct   = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
+  const pct = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
   const color = qty <= 0 ? "bg-gray-200" : qty <= reorderLevel ? "bg-red-500" : qty <= reorderLevel * 2 ? "bg-amber-400" : "bg-green-500";
   return (
     <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100">
@@ -55,7 +55,7 @@ function StockRow({ item, canEdit, onDelete }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-          {isOut  && <Badge variant="danger">Out of stock</Badge>}
+          {isOut && <Badge variant="danger">Out of stock</Badge>}
           {!isOut && isLow && <Badge variant="warning">Low</Badge>}
         </div>
         <div className="text-xs text-gray-400 mt-0.5 truncate">{item.productSku}</div>
@@ -80,26 +80,26 @@ function StockRow({ item, canEdit, onDelete }: {
 // ── Add/Edit product modal ────────────────────────────────
 
 function ProductModal({ existing, onClose }: { existing?: Product; onClose: () => void }) {
-  const [name, setName]          = useState(existing?.name ?? "");
-  const [brand, setBrand]        = useState(existing?.brand ?? "MRF");
+  const [name, setName] = useState(existing?.name ?? "");
+  const [brand, setBrand] = useState(existing?.brand ?? "MRF");
   const [customBrand, setCustom] = useState("");
-  const [size, setSize]          = useState(existing?.size ?? "");
-  const [type, setType]          = useState<TyreType>(existing?.type ?? "bike");
-  const [tubeType, setTubeType]  = useState<"tube_type"|"tubeless">("tube_type");
-  const [unitPrice, setPrice]    = useState(existing?.unitPrice ?? 0);
-  const [saving, setSaving]      = useState(false);
-  const [error, setError]        = useState("");
+  const [size, setSize] = useState(existing?.size ?? "");
+  const [type, setType] = useState<TyreType>(existing?.type ?? "bike");
+  const [tubeType, setTubeType] = useState<"tube_type" | "tubeless">("tube_type");
+  const [unitPrice, setPrice] = useState(existing?.unitPrice ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   function buildName() {
-    const b    = brand === "Other" ? customBrand : brand;
+    const b = brand === "Other" ? customBrand : brand;
     const tube = tubeType === "tubeless" ? "Tubeless" : "Tube Type";
     return `${size} ${b} ${tube}`.trim();
   }
   function buildSku() {
-    const b    = brand === "Other" ? customBrand : brand;
-    const t    = type === "bike" ? "BK" : "3W";
+    const b = brand === "Other" ? customBrand : brand;
+    const t = type === "bike" ? "BK" : "3W";
     const tube = tubeType === "tubeless" ? "TL" : "TT";
-    return `${size.replace(/[^0-9./]/g,"")}-${b.toUpperCase().slice(0,4)}-${t}-${tube}`.replace(/\s/g,"");
+    return `${size.replace(/[^0-9./]/g, "")}-${b.toUpperCase().slice(0, 4)}-${t}-${tube}`.replace(/\s/g, "");
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -108,7 +108,7 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
     if (!size || !finalBrand || unitPrice <= 0) { setError("Size, brand and price are required."); return; }
     setSaving(true); setError("");
     const finalName = name || buildName();
-    const sku       = existing?.sku ?? buildSku();
+    const sku = existing?.sku ?? buildSku();
     try {
       if (existing) {
         await updateDoc(doc(productsCol, existing.id), { name: finalName, brand: finalBrand, size, type, unitPrice, updatedAt: serverTimestamp() });
@@ -122,83 +122,85 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
 
   return (
     <Modal title={existing ? "Edit product" : "Add new product"} onClose={onClose} size="md">
-      <form onSubmit={handleSave} className="space-y-3">
-        {/* Tyre type */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
-          <div className="flex gap-2">
-            {(["bike","three_wheeler"] as TyreType[]).map(t => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                  type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                {t === "bike" ? "🏍 Bike" : "🛺 Three-wheeler"}
-              </button>
-            ))}
+      <form onSubmit={handleSave}>
+        <div className="space-y-3">
+          {/* Tyre type */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tyre type *</label>
+            <div className="flex gap-2">
+              {(["bike", "three_wheeler"] as TyreType[]).map(t => (
+                <button key={t} type="button" onClick={() => setType(t)}
+                  className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
+                    type === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                  {t === "bike" ? "🏍 Bike" : "🛺 3-Wheeler"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Tube type */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tube type *</label>
-          <div className="flex gap-2">
-            {(["tube_type","tubeless"] as const).map(t => (
-              <button key={t} type="button" onClick={() => setTubeType(t)}
-                className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                  tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                {t === "tube_type" ? "Tube type" : "Tubeless"}
-              </button>
-            ))}
+          {/* Tube type */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tube type *</label>
+            <div className="flex gap-2">
+              {(["tube_type", "tubeless"] as const).map(t => (
+                <button key={t} type="button" onClick={() => setTubeType(t)}
+                  className={cn("flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
+                    tubeType === t ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                  {t === "tube_type" ? "Tube type" : "Tubeless"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Brand */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-1.5 block">Brand *</label>
-          <div className="flex flex-wrap gap-2">
-            {BRANDS.map(b => (
-              <button key={b} type="button" onClick={() => setBrand(b)}
-                className={cn("rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
-                  brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
-                {b}
-              </button>
-            ))}
+          {/* Brand */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Brand *</label>
+            <div className="flex flex-wrap gap-2">
+              {BRANDS.map(b => (
+                <button key={b} type="button" onClick={() => setBrand(b)}
+                  className={cn("rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
+                    brand === b ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600")}>
+                  {b}
+                </button>
+              ))}
+            </div>
+            {brand === "Other" && (
+              <input value={customBrand} onChange={e => setCustom(e.target.value)}
+                placeholder="Enter brand name"
+                className="mt-2 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
+            )}
           </div>
-          {brand === "Other" && (
-            <input value={customBrand} onChange={e => setCustom(e.target.value)}
-              placeholder="Enter brand name"
-              className="mt-2 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
+
+          <Input label="Tyre size *"
+            placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"}
+            value={size} onChange={e => setSize(e.target.value)} />
+
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              Display name <span className="text-gray-400 font-normal text-xs">(auto-filled)</span>
+            </label>
+            <input value={name || buildName()} onChange={e => setName(e.target.value)}
+              className="w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
+          </div>
+
+          <Input label="Unit price (Rs) *" type="number" min={1}
+            value={unitPrice || ""} onChange={e => setPrice(parseFloat(e.target.value) || 0)}
+            placeholder="e.g. 2800" />
+
+          {!existing && (
+            <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              SKU: <span className="font-mono font-medium text-gray-700 break-all">{buildSku()}</span>
+            </div>
           )}
-        </div>
 
-        <Input label="Tyre size *"
-          placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"}
-          value={size} onChange={e => setSize(e.target.value)} />
+          {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
 
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">
-            Display name <span className="text-gray-400 font-normal">(auto-filled)</span>
-          </label>
-          <input value={name || buildName()} onChange={e => setName(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400" />
-        </div>
-
-        <Input label="Unit price (Rs) *" type="number" min={1}
-          value={unitPrice || ""} onChange={e => setPrice(parseFloat(e.target.value) || 0)}
-          placeholder="e.g. 2800" />
-
-        {!existing && (
-          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            SKU: <span className="font-mono font-medium text-gray-700">{buildSku()}</span>
+          <div className="flex gap-3 pt-2 pb-1">
+            <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" type="submit" loading={saving}>
+              {existing ? "Save changes" : "Add product"}
+            </Button>
           </div>
-        )}
-
-        {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-
-        <div className="flex gap-3 pt-1">
-          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" type="submit" loading={saving}>
-            {existing ? "Save changes" : "Add product"}
-          </Button>
         </div>
       </form>
     </Modal>
@@ -209,11 +211,11 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
 
 function AddStockModal({ products, onClose }: { products: Product[]; onClose: () => void }) {
   const [productId, setProductId] = useState("");
-  const [warehouseId, setWh]      = useState("anuradhapura");
-  const [qty, setQty]             = useState(0);
-  const [reorder, setReorder]     = useState(10);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
+  const [warehouseId, setWh] = useState("anuradhapura");
+  const [qty, setQty] = useState(0);
+  const [reorder, setReorder] = useState(10);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const selectedProduct = products.find(p => p.id === productId);
 
   async function handleSave(e: React.FormEvent) {
@@ -222,15 +224,15 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
     setSaving(true); setError("");
     try {
       const stockDocId = `${warehouseId}_${productId}`;
-      const wh         = WAREHOUSES.find(w => w.value === warehouseId)!;
-      const stockRef   = doc(stockCol, stockDocId);
+      const wh = WAREHOUSES.find(w => w.value === warehouseId)!;
+      const stockRef = doc(stockCol, stockDocId);
       await runTransaction(db, async tx => {
         const existing = await tx.get(stockRef);
         if (existing.exists()) {
           tx.update(stockRef, {
-            qty:          (existing.data() as Stock).qty + qty,
+            qty: (existing.data() as Stock).qty + qty,
             reorderLevel: reorder,
-            updatedAt:    serverTimestamp(),
+            updatedAt: serverTimestamp(),
           });
         } else {
           tx.set(stockRef, {
@@ -260,7 +262,9 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
         <Input label="Reorder alert level" type="number" min={1}
           value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 10)} />
         {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-        <div className="flex gap-3 pt-1">
+
+        {/* Sticky action buttons */}
+        <div className="flex gap-3 pt-2 pb-1">
           <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
           <Button className="flex-1" type="submit" loading={saving}>Add stock</Button>
         </div>
@@ -273,13 +277,13 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
 
 function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void }) {
   const { appUser } = useAuth();
-  const [fromWh, setFromWh]     = useState("kurunegala");
-  const [toWh, setToWh]         = useState("anuradhapura");
+  const [fromWh, setFromWh] = useState("kurunegala");
+  const [toWh, setToWh] = useState("anuradhapura");
   const [productId, setProduct] = useState("");
-  const [qty, setQty]           = useState(1);
-  const [submitting, setSub]    = useState(false);
-  const [error, setError]       = useState("");
-  const fromStock     = stock.filter(s => s.warehouseId === fromWh);
+  const [qty, setQty] = useState(1);
+  const [submitting, setSub] = useState(false);
+  const [error, setError] = useState("");
+  const fromStock = stock.filter(s => s.warehouseId === fromWh);
   const selectedStock = fromStock.find(s => s.productId === productId);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -297,12 +301,12 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
         createdBy: appUser?.uid ?? "", transferDate: serverTimestamp(), completedAt: serverTimestamp(),
       });
       const fromDocId = `${fromWh}_${selectedStock.productId}`;
-      const toDocId   = `${toWh}_${selectedStock.productId}`;
+      const toDocId = `${toWh}_${selectedStock.productId}`;
       await runTransaction(db, async tx => {
-        const fromRef  = doc(stockCol, fromDocId);
-        const toRef    = doc(stockCol, toDocId);
+        const fromRef = doc(stockCol, fromDocId);
+        const toRef = doc(stockCol, toDocId);
         const fromSnap = await tx.get(fromRef);
-        const toSnap   = await tx.get(toRef);
+        const toSnap = await tx.get(toRef);
         if (!fromSnap.exists()) throw new Error("Source stock not found.");
         const fromQty = (fromSnap.data() as Stock).qty;
         if (fromQty < qty) throw new Error("Insufficient stock.");
@@ -340,7 +344,8 @@ function TransferModal({ stock, onClose }: { stock: Stock[]; onClose: () => void
           value={qty} onChange={e => setQty(Number(e.target.value))}
           hint={selectedStock ? `Max: ${selectedStock.qty} units` : undefined} />
         {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-        <div className="flex gap-3 pt-2">
+
+        <div className="flex gap-3 pt-2 pb-1">
           <Button variant="secondary" className="flex-1" onClick={onClose} type="button">Cancel</Button>
           <Button className="flex-1" type="submit" loading={submitting} disabled={!productId}>Transfer</Button>
         </div>
@@ -355,22 +360,22 @@ type InventoryTab = "stock" | "products";
 
 export default function InventoryPage() {
   const { appUser } = useAuth();
-  const canEdit     = appUser?.role === "admin" || appUser?.role === "sales_rep";
-  const isAdmin     = appUser?.role === "admin";
+  const canEdit = appUser?.role === "admin" || appUser?.role === "sales_rep";
+  const isAdmin = appUser?.role === "admin";
 
-  const [activeTab, setActiveTab]           = useState<InventoryTab>("stock");
-  const [warehouseId, setWarehouseId]       = useState("");
-  const [search, setSearch]                 = useState("");
-  const [tyreTab, setTyreTab]               = useState<"all"|"bike"|"three_wheeler">("all");
-  const [showTransfer, setShowTransfer]     = useState(false);
-  const [showAddStock, setShowAddStock]     = useState(false);
+  const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
+  const [warehouseId, setWarehouseId] = useState("");
+  const [search, setSearch] = useState("");
+  const [tyreTab, setTyreTab] = useState<"all" | "bike" | "three_wheeler">("all");
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showAddStock, setShowAddStock] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
-  const [editProduct, setEditProduct]       = useState<Product | undefined>();
-  const [deleteProduct, setDeleteProduct]   = useState<Product | undefined>();
-  const [deleteStock, setDeleteStock]       = useState<Stock | undefined>();
+  const [editProduct, setEditProduct] = useState<Product | undefined>();
+  const [deleteProduct, setDeleteProduct] = useState<Product | undefined>();
+  const [deleteStock, setDeleteStock] = useState<Stock | undefined>();
 
   const { stock, lowStockItems, loading: stockLoading } = useStock({ warehouseId: warehouseId || undefined });
-  const [products, setProducts]    = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [prodLoading, setProdLoad] = useState(true);
 
   useEffect(() => {
@@ -397,8 +402,8 @@ export default function InventoryPage() {
 
   const filteredStock = stock.filter(s => {
     const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
-                        s.productSku?.toLowerCase().includes(search.toLowerCase());
-    const matchTab    = tyreTab === "all" || s.productType === tyreTab;
+      s.productSku?.toLowerCase().includes(search.toLowerCase());
+    const matchTab = tyreTab === "all" || s.productType === tyreTab;
     return matchSearch && matchTab;
   });
 
@@ -449,7 +454,7 @@ export default function InventoryPage() {
 
       {/* Main tabs */}
       <div className="mb-4 flex rounded-xl border border-gray-200 overflow-hidden">
-        {(["stock","products"] as InventoryTab[]).map(t => (
+        {(["stock", "products"] as InventoryTab[]).map(t => (
           <button key={t} onClick={() => { setActiveTab(t); setSearch(""); }}
             className={cn("flex-1 py-2.5 text-sm font-medium transition-colors",
               activeTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
@@ -494,7 +499,7 @@ export default function InventoryPage() {
               />
             </div>
             <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden text-sm flex-shrink-0">
-              {(["all","bike","three_wheeler"] as const).map(t => (
+              {(["all", "bike", "three_wheeler"] as const).map(t => (
                 <button key={t} onClick={() => setTyreTab(t)}
                   className={cn("px-3 py-2 font-medium transition-colors",
                     tyreTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
@@ -626,11 +631,11 @@ export default function InventoryPage() {
       )}
 
       {/* Modals */}
-      {showTransfer   && <TransferModal stock={stock} onClose={() => setShowTransfer(false)} />}
-      {showAddStock   && <AddStockModal products={products.filter(p => p.active !== false)} onClose={() => setShowAddStock(false)} />}
+      {showTransfer && <TransferModal stock={stock} onClose={() => setShowTransfer(false)} />}
+      {showAddStock && <AddStockModal products={products.filter(p => p.active !== false)} onClose={() => setShowAddStock(false)} />}
       {showAddProduct && <ProductModal onClose={() => setShowAddProduct(false)} />}
-      {editProduct    && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
-      {deleteProduct  && (
+      {editProduct && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
+      {deleteProduct && (
         <DeleteConfirmDialog
           title="Delete product"
           description={`${deleteProduct.name} (${deleteProduct.sku})`}
