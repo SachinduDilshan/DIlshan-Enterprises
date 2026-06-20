@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, RotateCcw, PackageCheck, Send,
   Clock, CheckCircle, AlertTriangle, Undo2, Trash2,
+  Package,
 } from "lucide-react";
 import type { UCReturn, UCReturnStatus } from "@/types";
 
@@ -34,19 +35,38 @@ function fmtDt(ts: Timestamp | undefined): string {
   });
 }
 
-const STATUS_META: Record<UCReturnStatus, { label: string; color: "warning"|"info"|"default"|"success"; icon: React.ElementType }> = {
-  approved:             { label: "Approved — tyre with us",       color: "warning", icon: PackageCheck },
-  sent_to_supplier:     { label: "Sent to CEAT",                  color: "info",    icon: Send         },
-  awaiting_replacement: { label: "Waiting for CEAT replacement",  color: "default", icon: Clock        },
-  closed:               { label: "Closed — replacement received", color: "success", icon: CheckCircle  },
+const STATUS_META: Record<UCReturnStatus, {
+  label: string; badge: "warning" | "info" | "default" | "success"; icon: React.ElementType;
+  btnClass: string; alertClass: string;
+}> = {
+  approved: {
+    label: "Tyre with us", badge: "warning", icon: PackageCheck,
+    btnClass: "bg-amber-600 hover:bg-amber-700 text-white",
+    alertClass: "bg-amber-50 border-amber-200 text-amber-800",
+  },
+  sent_to_supplier: {
+    label: "Sent to CEAT", badge: "info", icon: Send,
+    btnClass: "bg-blue-600 hover:bg-blue-700 text-white",
+    alertClass: "bg-blue-50 border-blue-200 text-blue-800",
+  },
+  awaiting_replacement: {
+    label: "Awaiting replacement", badge: "default", icon: Clock,
+    btnClass: "bg-gray-700 hover:bg-gray-800 text-white",
+    alertClass: "bg-gray-50 border-gray-200 text-gray-700",
+  },
+  closed: {
+    label: "Closed", badge: "success", icon: CheckCircle,
+    btnClass: "bg-success-500 hover:bg-green-700 text-white",
+    alertClass: "bg-success-50 border-green-200 text-success-700",
+  },
 };
 
 const REASON_LABELS: Record<string, string> = {
-  sidewall_bulge:       "Sidewall bulge",
-  tread_separation:     "Tread separation",
+  sidewall_bulge: "Sidewall bulge",
+  tread_separation: "Tread separation",
   manufacturing_defect: "Manufacturing defect",
-  bead_damage:          "Bead damage",
-  other:                "Other",
+  bead_damage: "Bead damage",
+  other: "Other",
 };
 
 // ── Undo toast ────────────────────────────────────────────
@@ -78,9 +98,9 @@ function UndoToast({ undo, onUndo, onDismiss }: {
 
 function StatusTimeline({ uc }: { uc: UCReturn }) {
   const steps = [
-    { key: "received",    label: "Received from shop", done: uc.tyreReceivedFromShop,     date: uc.tyreReceivedAt        },
-    { key: "sent",        label: "Sent to CEAT",        done: !!uc.sentToSupplierAt,      date: uc.sentToSupplierAt      },
-    { key: "replacement", label: "Replacement back",    done: !!uc.replacementReceivedAt, date: uc.replacementReceivedAt },
+    { key: "received", label: "Received from shop", done: uc.tyreReceivedFromShop, date: uc.tyreReceivedAt },
+    { key: "sent", label: "Sent to CEAT", done: !!uc.sentToSupplierAt, date: uc.sentToSupplierAt },
+    { key: "replacement", label: "Replacement back", done: !!uc.replacementReceivedAt, date: uc.replacementReceivedAt },
   ];
   return (
     <div className="mt-4 flex items-start">
@@ -139,7 +159,7 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
   const meta = STATUS_META[uc.status];
   const StatusIcon = meta.icon;
   const daysWithUs = daysSince(uc.tyreReceivedAt);
-  const daysSent   = daysSince(uc.sentToSupplierAt);
+  const daysSent = daysSince(uc.sentToSupplierAt);
 
   return (
     <Card className="mb-3">
@@ -156,8 +176,9 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
               <p className="text-xs text-gray-400 mt-0.5">Received: {fmtDt(uc.tyreReceivedAt)}</p>
             </div>
             <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-              <Badge variant={meta.color}>
-                <StatusIcon className="h-3 w-3 mr-1" />{meta.label}
+              <Badge variant={meta.badge}>
+                <StatusIcon className="h-3 w-3 mr-1" />
+                {meta.label}
               </Badge>
               <span className="text-xs text-brand-600">{expanded ? "Hide ▲" : "Details ▼"}</span>
             </div>
@@ -177,16 +198,20 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
       </div>
 
       {/* Alerts */}
-      {uc.status === "approved" && daysWithUs !== null && daysWithUs >= 3 && (
-        <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-          <p className="text-xs text-amber-800">Tyre with you <span className="font-medium">{daysWithUs} days</span> — not sent to CEAT</p>
+      {uc.status === "approved" && uc.tyreReceivedFromShop && daysWithUs !== null && daysWithUs >= 3 && (
+        <div className={cn("mt-2 flex items-center gap-2 rounded-lg border px-3 py-2", STATUS_META.approved.alertClass)}>
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          <p className="text-xs">
+            Tyre with you for <span className="font-medium">{daysWithUs} days</span> — not yet sent to CEAT
+          </p>
         </div>
       )}
       {(uc.status === "sent_to_supplier" || uc.status === "awaiting_replacement") && daysSent !== null && daysSent >= 30 && (
         <div className="mt-2 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-600 flex-shrink-0" />
-          <p className="text-xs text-red-800">Sent to CEAT <span className="font-medium">{daysSent} days ago</span> — follow up!</p>
+          <p className="text-xs text-red-800">
+            Sent to CEAT <span className="font-medium">{daysSent} days ago</span> — follow up!
+          </p>
         </div>
       )}
 
@@ -196,21 +221,39 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
       {/* Action buttons */}
       <div className="mt-3 flex flex-wrap gap-2">
         {uc.status === "approved" && (
-          <Button size="sm"
-            onClick={() => onAction(uc.id, "sent_to_supplier", { status: "sent_to_supplier", sentToSupplierAt: Timestamp.now() }, uc.status, { status: "approved", sentToSupplierAt: null }, "Marked as sent to CEAT")}>
-            Mark sent to CEAT
+          <Button size="sm" className={cn("border-0", STATUS_META.approved.btnClass)}
+            onClick={() => onAction(
+              uc.id, "sent_to_supplier",
+              { status: "sent_to_supplier", sentToSupplierAt: Timestamp.now() },
+              uc.status,
+              { status: "approved", sentToSupplierAt: null },
+              "Marked as sent to CEAT"
+            )}>
+            <Send className="h-3.5 w-3.5" /> Mark sent to CEAT
           </Button>
         )}
         {uc.status === "sent_to_supplier" && (
-          <Button size="sm" variant="secondary"
-            onClick={() => onAction(uc.id, "awaiting_replacement", { status: "awaiting_replacement" }, uc.status, { status: "sent_to_supplier" }, "Marked CEAT acknowledged")}>
-            Confirm CEAT acknowledged
+          <Button size="sm" className={cn("border-0", STATUS_META.sent_to_supplier.btnClass)}
+            onClick={() => onAction(
+              uc.id, "awaiting_replacement",
+              { status: "awaiting_replacement" },
+              uc.status,
+              { status: "sent_to_supplier" },
+              "Marked CEAT acknowledged"
+            )}>
+            <CheckCircle className="h-3.5 w-3.5" /> Confirm CEAT acknowledged
           </Button>
         )}
         {uc.status === "awaiting_replacement" && (
-          <Button size="sm"
-            onClick={() => onAction(uc.id, "closed", { status: "closed", replacementReceivedAt: Timestamp.now() }, uc.status, { status: "awaiting_replacement", replacementReceivedAt: null }, "Marked replacement received")}>
-            Mark replacement received from CEAT
+          <Button size="sm" className={cn("border-0", STATUS_META.awaiting_replacement.btnClass)}
+            onClick={() => onAction(
+              uc.id, "closed",
+              { status: "closed", replacementReceivedAt: Timestamp.now() },
+              uc.status,
+              { status: "awaiting_replacement", replacementReceivedAt: null },
+              "Marked replacement received"
+            )}>
+            <Package className="h-3.5 w-3.5" /> Mark replacement received
           </Button>
         )}
       </div>
@@ -221,22 +264,31 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
 // ── Summary ───────────────────────────────────────────────
 
 function SummarySection({ returns }: { returns: UCReturn[] }) {
-  const totalQty   = returns.reduce((s, r) => s + r.qty, 0);
+  const totalQty = returns.reduce((s, r) => s + r.qty, 0);
   const totalValue = returns.reduce((s, r) => s + ((r as any).totalValue ?? 0), 0);
-  const withUs     = returns.filter(r => r.status === "approved").length;
-  const withCEAT   = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
-  const notGiven   = returns.filter(r => !r.gaveTyreToShop).length;
+  const withUs = returns.filter(r => r.status === "approved").length;
+  const withCEAT = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
+  const notGiven = returns.filter(r => !r.gaveTyreToShop).length;
 
   return (
     <div className="mb-5 rounded-2xl border border-gray-100 bg-white overflow-hidden">
-      <div className="px-4 py-3 bg-brand-600 text-white">
-        <p className="text-sm font-medium">Active UC returns summary</p>
-        <p className="text-xs text-brand-200 mt-0.5">{returns.length} returns · {totalQty} tyres · Rs {totalValue.toLocaleString()} total value</p>
+      <div className="px-4 py-3 border-b border-gray-100">
+        <p className="text-sm font-medium text-gray-900">Active UC returns summary</p>
+        <p className="text-xs text-gray-400 mt-0.5">{returns.length} returns · {totalQty} tyres · Rs {totalValue.toLocaleString()} total value</p>
       </div>
       <div className="grid grid-cols-3 divide-x divide-gray-100">
-        <div className="px-3 py-3 text-center"><p className="text-xl font-semibold text-brand-700">{withUs}</p><p className="text-[11px] text-gray-500 mt-0.5">With us</p></div>
-        <div className="px-3 py-3 text-center"><p className="text-xl font-semibold text-blue-700">{withCEAT}</p><p className="text-[11px] text-gray-500 mt-0.5">With CEAT</p></div>
-        <div className="px-3 py-3 text-center"><p className={cn("text-xl font-semibold", notGiven > 0 ? "text-amber-700" : "text-green-700")}>{notGiven}</p><p className="text-[11px] text-gray-500 mt-0.5">No replacement given</p></div>
+        <div className="px-3 py-3 text-center">
+          <p className="text-xl font-semibold text-amber-700">{withUs}</p>
+          <p className="text-[11px] text-gray-500 leading-tight mt-0.5">With us</p>
+        </div>
+        <div className="px-3 py-3 text-center">
+          <p className="text-xl font-semibold text-blue-700">{withCEAT}</p>
+          <p className="text-[11px] text-gray-500 leading-tight mt-0.5">With CEAT</p>
+        </div>
+        <div className="px-3 py-3 text-center">
+          <p className={cn("text-xl font-semibold", notGiven > 0 ? "text-amber-700" : "text-success-700")}>{notGiven}</p>
+          <p className="text-[11px] text-gray-500 leading-tight mt-0.5">No replacement given</p>
+        </div>
       </div>
     </div>
   );
@@ -247,14 +299,14 @@ function SummarySection({ returns }: { returns: UCReturn[] }) {
 type TabKey = "active" | "closed";
 
 export default function UCReturnsPage() {
-  const { appUser }                   = useAuth();
-  const [returns, setReturns]         = useState<UCReturn[]>([]);
-  const [allReturns, setAllReturns]   = useState<UCReturn[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [tab, setTab]                 = useState<TabKey>("active");
-  const [undoState, setUndoState]     = useState<UndoState | null>(null);
-  const [toDelete, setToDelete]       = useState<UCReturn | null>(null);
-  const undoTimer                     = useRef<NodeJS.Timeout | null>(null);
+  const { appUser } = useAuth();
+  const [returns, setReturns] = useState<UCReturn[]>([]);
+  const [allReturns, setAllReturns] = useState<UCReturn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>("active");
+  const [undoState, setUndoState] = useState<UndoState | null>(null);
+  const [toDelete, setToDelete] = useState<UCReturn | null>(null);
+  const undoTimer = useRef<NodeJS.Timeout | null>(null);
 
   const isAdmin = appUser?.role === "admin";
 
@@ -320,11 +372,15 @@ export default function UCReturnsPage() {
 
       {tab === "active" && activeReturns.length > 0 && <SummarySection returns={activeReturns} />}
 
-      <div className="mb-4 flex rounded-xl border border-gray-200 overflow-hidden">
+      <div className="mb-4 flex gap-1.5 rounded-xl bg-gray-50 p-1">
         {(["active", "closed"] as TabKey[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("flex-1 py-2.5 text-sm font-medium transition-colors",
-              tab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
+            className={cn(
+              "flex-1 rounded-lg py-2 text-sm font-medium transition-colors border",
+              tab === t
+                ? "bg-white text-gray-900 border-brand-500"
+                : "bg-transparent text-gray-500 border-transparent hover:text-gray-700"
+            )}>
             {t === "active"
               ? `Active (${allReturns.filter(r => r.status !== "closed").length})`
               : `Closed (${allReturns.filter(r => r.status === "closed").length})`}

@@ -16,6 +16,7 @@ import { CalendarClock, CheckCircle } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cheque, ChequeStatus } from "@/types";
+import { Tabs } from "@/components/ui/Tabs";
 
 type TabKey = "due" | "all" | "deposited";
 
@@ -24,20 +25,20 @@ function daysUntil(ts: Timestamp): number {
 }
 
 function urgencyBadge(days: number) {
-  if (days < 0)   return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
+  if (days < 0) return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
   if (days === 0) return <Badge variant="danger">Due today</Badge>;
-  if (days <= 2)  return <Badge variant="danger">Due in {days}d</Badge>;
-  if (days <= 5)  return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 2) return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 5) return <Badge variant="warning">Due in {days}d</Badge>;
   return <Badge variant="default">Due in {days}d</Badge>;
 }
 
 export default function ChequesPage() {
-  const { appUser }                       = useAuth();
-  const [cheques, setCheques]             = useState<Cheque[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [tab, setTab]                     = useState<TabKey>("due");
-  const [depositing, setDepositing]       = useState<string | null>(null);
-  const [toDelete, setToDelete]           = useState<Cheque | null>(null);
+  const { appUser } = useAuth();
+  const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>("due");
+  const [depositing, setDepositing] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Cheque | null>(null);
 
   const isAdmin = appUser?.role === "admin";
 
@@ -53,20 +54,20 @@ export default function ChequesPage() {
     return unsub;
   }, [tab]);
 
-  const dueSoon  = cheques.filter(c => daysUntil(c.dueDate) <= 5);
+  const dueSoon = cheques.filter(c => daysUntil(c.dueDate) <= 5);
   const displayed = tab === "due" ? dueSoon : cheques;
 
   async function markDeposited(cheque: Cheque) {
     setDepositing(cheque.id);
     try {
       await updateDoc(doc(db, "cheques", cheque.id), {
-        status:      "deposited",
+        status: "deposited",
         depositedAt: serverTimestamp(),
-        updatedAt:   serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "shops", cheque.shopId), {
         outstandingBalance: -cheque.amount,
-        updatedAt:          serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } finally {
       setDepositing(null);
@@ -79,7 +80,7 @@ export default function ChequesPage() {
   }
 
   const totalPending = cheques.filter(c => c.status === "pending").length;
-  const totalValue   = cheques.filter(c => c.status === "pending").reduce((s, c) => s + c.amount, 0);
+  const totalValue = cheques.filter(c => c.status === "pending").reduce((s, c) => s + c.amount, 0);
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
@@ -92,7 +93,7 @@ export default function ChequesPage() {
       <div className="grid grid-cols-2 gap-3 mb-5">
         <Card className="flex items-center gap-3">
           <div className="rounded-xl bg-amber-50 p-2.5">
-            <CalendarClock className="h-5 w-5 text-amber-600" />
+            <CalendarClock className="h-5 w-5 text-amber-700" />
           </div>
           <div>
             <p className="text-xs text-gray-500">Pending cheques</p>
@@ -100,8 +101,8 @@ export default function ChequesPage() {
           </div>
         </Card>
         <Card className="flex items-center gap-3">
-          <div className="rounded-xl bg-brand-50 p-2.5">
-            <CheckCircle className="h-5 w-5 text-brand-600" />
+          <div className="rounded-xl bg-gray-100 p-2.5">
+            <CheckCircle className="h-5 w-5 text-gray-700" />
           </div>
           <div>
             <p className="text-xs text-gray-500">Total value</p>
@@ -111,24 +112,16 @@ export default function ChequesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-4 flex rounded-xl border border-gray-200 bg-white overflow-hidden">
-        {([
-          { key: "due",       label: `Due soon (${dueSoon.length})` },
-          { key: "all",       label: "All pending"                  },
-          { key: "deposited", label: "Deposited"                    },
-        ] as { key: TabKey; label: string }[]).map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={cn(
-              "flex-1 py-2.5 text-sm font-medium transition-colors",
-              tab === t.key ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="mb-4"
+        active={tab}
+        onChange={k => setTab(k as TabKey)}
+        options={[
+          { key: "due", label: `Due soon (${dueSoon.length})` },
+          { key: "all", label: "All pending" },
+          { key: "deposited", label: "Deposited" },
+        ]}
+      />
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -141,21 +134,21 @@ export default function ChequesPage() {
           <CalendarClock className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm text-gray-500">
             {tab === "due" ? "No cheques due in the next 5 days" :
-             tab === "all" ? "No pending cheques" : "No deposited cheques yet"}
+              tab === "all" ? "No pending cheques" : "No deposited cheques yet"}
           </p>
         </Card>
       )}
 
       <div className="space-y-3">
         {displayed.map(cheque => {
-          const days     = daysUntil(cheque.dueDate);
+          const days = daysUntil(cheque.dueDate);
           const isUrgent = days <= 2;
           return (
             <Card
               key={cheque.id}
               className={cn(
                 "border-l-4",
-                isUrgent ? "border-l-red-400" : days <= 5 ? "border-l-amber-400" : "border-l-gray-200"
+                isUrgent ? "border-l-red-500" : days <= 5 ? "border-l-amber-500" : "border-l-gray-200"
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -179,7 +172,7 @@ export default function ChequesPage() {
                   {tab !== "deposited" && cheque.status === "pending" && (
                     <Button
                       size="sm"
-                      variant="secondary"
+                      className={cn("border-0 text-white", isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700")}
                       loading={depositing === cheque.id}
                       onClick={() => markDeposited(cheque)}
                     >

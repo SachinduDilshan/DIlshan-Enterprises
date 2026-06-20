@@ -23,6 +23,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
+import { Tabs } from "@/components/ui/Tabs";
 
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
@@ -453,15 +454,15 @@ export default function InventoryPage() {
       </div>
 
       {/* Main tabs */}
-      <div className="mb-4 flex rounded-xl border border-gray-200 overflow-hidden">
-        {(["stock", "products"] as InventoryTab[]).map(t => (
-          <button key={t} onClick={() => { setActiveTab(t); setSearch(""); }}
-            className={cn("flex-1 py-2.5 text-sm font-medium transition-colors",
-              activeTab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700")}>
-            {t === "stock" ? "Stock levels" : "Product catalogue"}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="mb-4"
+        active={activeTab}
+        onChange={k => { setActiveTab(k as InventoryTab); setSearch(""); }}
+        options={[
+          { key: "stock", label: "Stock levels" },
+          { key: "products", label: "Product catalogue" },
+        ]}
+      />
 
       {/* Search */}
       <div className="mb-4">

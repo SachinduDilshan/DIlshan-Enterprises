@@ -18,7 +18,7 @@ import Link from "next/link";
 import type { Shop } from "@/types";
 
 const WAREHOUSES = [
-  { value: "polonnaruwa",   label: "Polonnaruwa"   },
+  { value: "polonnaruwa", label: "Polonnaruwa" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 
@@ -28,16 +28,16 @@ interface Stop { shopId: string; shopName: string; shopCity: string; items: Stop
 export default function NewDispatchPage() {
   const router = useRouter();
   const { appUser } = useAuth();
-  const { shops }   = useShops();
+  const { shops } = useShops();
   const { products } = useProducts();
 
-  const [lorryReg, setLorryReg]         = useState("NB-4512");
-  const [lorryModel, setLorryModel]     = useState("Isuzu NPR");
-  const [warehouseId, setWarehouseId]   = useState("anuradhapura");
+  const [lorryReg, setLorryReg] = useState("NB-4512");
+  const [lorryModel, setLorryModel] = useState("Isuzu NPR");
+  const [warehouseId, setWarehouseId] = useState("anuradhapura");
   const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split("T")[0]);
-  const [stops, setStops]               = useState<Stop[]>([]);
-  const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState("");
+  const [stops, setStops] = useState<Stop[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   // ── Stop helpers ─────────────────────────────────────────
 
@@ -115,16 +115,15 @@ export default function NewDispatchPage() {
       const dispatchRef = await addDoc(dispatchesCol, {
         lorryReg,
         lorryModel,
-        fromWarehouseId:   warehouseId,
+        fromWarehouseId: warehouseId,
         fromWarehouseName: wh.label,
-        createdBy:         appUser?.uid ?? "",
-        status:            "planned",
-        totalStops:        stops.length,
+        createdBy: appUser?.uid ?? "",
+        status: "planned",
+        totalStops: stops.length,
         totalUnits,
-        dispatchDate:      Timestamp.fromDate(new Date(dispatchDate)),
-        notes:             "",
-        createdAt:         serverTimestamp(),
-        id:                "", // will be set in Firestore trigger
+        dispatchDate: Timestamp.fromDate(new Date(dispatchDate)),
+        notes: "",
+        createdAt: serverTimestamp(),
       });
 
       // Write each stop as subcollection document
@@ -132,17 +131,17 @@ export default function NewDispatchPage() {
         const s = stops[i];
         const stopRef = doc(dispatchStopsCol(dispatchRef.id));
         await setDoc(stopRef, {
-          id:          stopRef.id,
-          dispatchId:  dispatchRef.id,
-          shopId:      s.shopId,
-          shopName:    s.shopName,
-          shopCity:    s.shopCity,
-          stopOrder:   i + 1,
-          items:       s.items,
-          totalUnits:  s.items.reduce((sum, it) => sum + it.qty, 0),
-          status:      "pending",
-          deliveredAt: undefined,
-          skippedReason: undefined,
+          id: stopRef.id,
+          dispatchId: dispatchRef.id,
+          shopId: s.shopId,
+          shopName: s.shopName,
+          shopCity: s.shopCity,
+          stopOrder: i + 1,
+          items: s.items,
+          totalUnits: s.items.reduce((sum, it) => sum + it.qty, 0),
+          status: "pending",
+          deliveredAt: null,
+          skippedReason: null,
         });
       }
 
