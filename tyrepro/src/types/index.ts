@@ -127,20 +127,26 @@ export interface InvoiceItem {
 }
 
 export interface Cheque {
-  id: string;
-  invoiceId: string;
-  invoiceNo: string;
-  shopId: string;
-  shopName: string;
-  chequeNo: string;
-  bank: string;
-  amount: number;
-  dueDate: Timestamp;
-  status: ChequeStatus;
-  depositedAt?: Timestamp;
-  bounceNotes?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  id:             string;
+  shopId:         string;
+  shopName:       string;
+  invoiceId:      string;
+  invoiceNo:      string;
+  bank:           string;
+  chequeNo:       string;
+  amount:         number;
+  originalDueDate?: Timestamp;       // ← add: first ever due date
+  dueDate:        Timestamp;         // current (possibly rescheduled) due date
+  rescheduledDates?: {               // ← add: history of reschedules
+    from:     Timestamp;
+    to:       Timestamp;
+    reason:   string;
+    at:       Timestamp;
+  }[];
+  status:         "pending" | "deposited" | "bounced";
+  depositedAt?:   Timestamp;
+  createdAt:      Timestamp;
+  updatedAt?:     Timestamp;
 }
 
 /**
