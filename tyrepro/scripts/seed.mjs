@@ -50,6 +50,7 @@ const auth = getAuth();
 // ── 1. Warehouses ──────────────────────────────────────────
 const warehouses = [
   { id: "kurunegala",   name: "Kurunegala",   location: "Kurunegala, North Western Province" },
+  { id: "polonnaruwa",   name: "Polonnaruwa",   location: "Polonnaruwa, North Central Province" },
   { id: "anuradhapura", name: "Anuradhapura", location: "Anuradhapura, North Central Province" },
 ];
 
