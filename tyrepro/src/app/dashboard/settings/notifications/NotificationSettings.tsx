@@ -229,7 +229,7 @@ export default function NotificationSettings() {
             <p className="text-sm font-medium text-gray-900">Email delivery</p>
             <p className="text-xs text-gray-500 mt-0.5">
               Alerts are sent to <span className="font-medium text-gray-700">{appUser?.email}</span> every morning at 7 AM.
-              Only active alerts are included — if everything is clear, no email is sent.
+              Only active alerts are included. If everything is clear, no email is sent.
             </p>
           </div>
         </div>

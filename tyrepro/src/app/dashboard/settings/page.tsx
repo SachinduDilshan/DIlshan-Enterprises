@@ -14,7 +14,7 @@ export default function SettingsPage() {
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="mb-5">
         <h1 className="text-xl font-medium text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">Dilshan Enterprises — system configuration</p>
+        <p className="text-sm text-gray-500">System Configuration</p>
       </div>
 
       <Tabs
