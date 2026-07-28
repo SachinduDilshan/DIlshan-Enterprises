@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { BarChart3, FileText, Package, RotateCcw, CalendarClock } from "lucide-react";
-import DailySalesReport from "@/components/reports/DailySalesReport";
 import ChequesReport from "@/components/reports/ChequesReport";
 import StockMovementReport from "@/components/reports/StockMovementReport";
 import UCReturnsReport from "@/components/reports/UCReturnsReport";
 import ShopSalesReport from "@/components/reports/ShopSalesReport";
+import SalesReport from "@/components/reports/SalesReport";
 
 const TABS = [
-  { key: "daily",   label: "Daily Sales", icon: BarChart3     },
+  { key: "daily",   label: "Sales Report", icon: BarChart3     },
   { key: "shop",    label: "Shop-wise",   icon: FileText      },
   { key: "cheques", label: "Cheques",     icon: CalendarClock },
   { key: "stock",   label: "Stock",       icon: Package       },
@@ -54,7 +54,7 @@ export default function ReportsPage() {
 
       {/* Report content */}
       <div className="space-y-4 w-full max-w-full overflow-x-hidden">
-        {tab === "daily"   && <DailySalesReport />}
+        {tab === "daily"   && <SalesReport />}
         {tab === "shop"    && <ShopSalesReport />}
         {tab === "cheques" && <ChequesReport />}
         {tab === "stock"   && <StockMovementReport />}

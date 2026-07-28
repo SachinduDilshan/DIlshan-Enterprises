@@ -82,6 +82,11 @@ service cloud.firestore {
       }
     }
 
+    match /emailLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+    }
+
     match /warehouses/{id} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();

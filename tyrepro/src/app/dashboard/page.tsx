@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import {
   Package, FileText, CalendarClock, RotateCcw,
   TrendingUp, ChevronDown, ChevronUp, Truck, Store,
+  BarChart3,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -24,6 +25,9 @@ const ALL_QUICK_LINKS = [
   { href: "/dashboard/cheques",      label: "Cheques Due",    icon: CalendarClock, bg: "bg-warning-50", fg: "text-warning-500", roles: ["admin","sales_rep"]          },
   { href: "/dashboard/uc-returns",   label: "UC Returns",     icon: RotateCcw,     bg: "bg-danger-50",  fg: "text-danger-500",  roles: ["admin","sales_rep"]          },
   { href: "/dashboard/dispatch",     label: "Dispatch",       icon: Truck,         bg: "bg-blue-50",    fg: "text-blue-600",    roles: ["admin","sales_rep","driver"] },
+  {
+    href: "/dashboard/reports",   label: "Sales Report",     icon: BarChart3,     bg: "bg-brand-50",  fg: "text-brand-600",  roles: ["admin","sales_rep"]
+  }
 ];
 
 const ALERT_LINKS: Record<string, string> = {
@@ -31,6 +35,7 @@ const ALERT_LINKS: Record<string, string> = {
   cheque_overdue:  "/dashboard/cheques",
   low_stock:       "/dashboard/inventory",
   out_of_stock:    "/dashboard/inventory",
+  sale_report:     "/dashboard/reports",
   uc_not_sent:     "/dashboard/uc-returns",
   ceat_overdue:    "/dashboard/uc-returns",
 };
