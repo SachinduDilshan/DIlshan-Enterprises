@@ -11,10 +11,6 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-const WAREHOUSES = [
-  { value: "polonnaruwa",   label: "Polonnaruwa"   },
-  { value: "anuradhapura", label: "Anuradhapura" },
-];
 
 export default function NewShopPage() {
   const router = useRouter();
@@ -76,12 +72,6 @@ export default function NewShopPage() {
             <Input label="Phone *" type="tel" placeholder="07X XXXXXXX" value={form.phone} onChange={e => set("phone", e.target.value)} required />
             <Input label="City *" placeholder="e.g. Medawachchiya" value={form.city} onChange={e => set("city", e.target.value)} required />
             <Input label="Address" placeholder="Street / area (optional)" value={form.address} onChange={e => set("address", e.target.value)} />
-            <Select
-              label="Served by warehouse"
-              value={form.assignedWarehouseId}
-              onChange={e => set("assignedWarehouseId", e.target.value)}
-              options={WAREHOUSES}
-            />
           </div>
 
           {error && <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}

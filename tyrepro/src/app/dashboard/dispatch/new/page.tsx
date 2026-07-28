@@ -18,7 +18,7 @@ import Link from "next/link";
 import type { Shop } from "@/types";
 
 const WAREHOUSES = [
-  { value: "polonnaruwa", label: "Polonnaruwa" },
+  { value: "kurunegala", label: "Kurunegala" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 

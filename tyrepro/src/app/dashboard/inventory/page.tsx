@@ -25,12 +25,14 @@ import { db } from "@/lib/firebase";
 import { stockCol, transfersCol, productsCol } from "@/lib/firestore-collections";
 import { Tabs } from "@/components/ui/Tabs";
 
+
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
   { value: "kurunegala", label: "Kurunegala" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
-const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other"];
+
+const BRANDS = ["CEAT", "Other"];
 
 // ── Stock bar ─────────────────────────────────────────────
 
@@ -44,37 +46,213 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   );
 }
 
+function AdjustStockModal({ item, mode, onClose }: {
+  item: Stock; mode: "add" | "remove"; onClose: () => void;
+}) {
+  const [qty, setQty]       = useState(1);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState("");
+  const maxRemove           = item.qty;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (qty < 1) { setError("Quantity must be at least 1."); return; }
+    if (mode === "remove" && qty > maxRemove) {
+      setError(`Only ${maxRemove} units available.`); return;
+    }
+    setSaving(true); setError("");
+    try {
+      await runTransaction(db, async tx => {
+        const ref  = doc(stockCol, item.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("Stock record not found.");
+        const current = (snap.data() as Stock).qty ?? 0;
+        const newQty  = mode === "add" ? current + qty : Math.max(0, current - qty);
+        tx.update(ref, { qty: newQty, updatedAt: serverTimestamp() });
+      });
+      await addDoc(collection(db, "stockAdjustments"), {
+        stockId:       item.id,
+        warehouseId:   item.warehouseId,
+        warehouseName: item.warehouseName,
+        productId:     item.productId,
+        productName:   item.productName,
+        mode,
+        qty,
+        reason: reason.trim() || null,
+        adjustedAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const afterQty = mode === "add" ? item.qty + qty : Math.max(0, item.qty - qty);
+
+  return (
+    <Modal
+      title={mode === "add" ? "Add stock" : "Remove stock"}
+      subtitle={`${item.productName} · ${item.warehouseName}`}
+      onClose={onClose}
+      size="sm"
+    >
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Current */}
+        <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+          <span className="text-sm text-gray-600">Current stock</span>
+          <span className={cn("text-lg font-semibold",
+            item.qty <= item.reorderLevel ? "text-red-600" : "text-gray-900")}>
+            {item.qty} units
+          </span>
+        </div>
+
+        {/* Qty stepper */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">
+            Quantity to {mode === "add" ? "add" : "remove"} *
+          </label>
+          <div className="flex items-center gap-2">
+            <button type="button"
+              onClick={() => setQty(q => Math.max(1, q - 1))}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50">
+              <Minus className="h-4 w-4 text-gray-600" />
+            </button>
+            <input
+              type="number" min={1} max={mode === "remove" ? maxRemove : undefined}
+              value={qty}
+              onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+              className="flex-1 min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-center text-lg font-semibold focus:outline-none focus:border-brand-400"
+            />
+            <button type="button"
+              onClick={() => setQty(q => q + 1)}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50">
+              <Plus className="h-4 w-4 text-gray-600" />
+            </button>
+          </div>
+          {mode === "remove" && (
+            <p className="text-xs text-gray-400 mt-1">Max: {maxRemove} units</p>
+          )}
+        </div>
+
+        {/* After preview */}
+        <div className={cn("flex items-center justify-between rounded-xl px-4 py-3",
+          mode === "add" ? "bg-green-50" : "bg-red-50")}>
+          <span className={cn("text-sm", mode === "add" ? "text-green-700" : "text-red-700")}>
+            After adjustment
+          </span>
+          <span className={cn("text-lg font-semibold",
+            mode === "add" ? "text-green-800" : "text-red-800")}>
+            {afterQty} units
+          </span>
+        </div>
+
+        {/* Reason */}
+        <Input
+          label="Reason (optional)"
+          placeholder={mode === "add" ? "e.g. New stock received from supplier" : "e.g. Damaged goods removed"}
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+        />
+
+        {error && (
+          <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className={cn("flex-1 border-0 text-white",
+              mode === "add" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700")}
+            type="submit"
+            loading={saving}
+          >
+            {mode === "add" ? "Add stock" : "Remove stock"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Stock row ─────────────────────────────────────────────
 
 function StockRow({ item, canEdit, onDelete }: {
   item: Stock; canEdit: boolean; onDelete: (item: Stock) => void;
 }) {
+  const [adjustMode, setAdjustMode] = useState<"add" | "remove" | null>(null);
   const isLow = item.qty <= item.reorderLevel;
   const isOut = item.qty === 0;
+
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-          {isOut && <Badge variant="danger">Out of stock</Badge>}
-          {!isOut && isLow && <Badge variant="warning">Low</Badge>}
+    <>
+      <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
+            {isOut  && <Badge variant="danger">Out of stock</Badge>}
+            {!isOut && isLow && <Badge variant="warning">Low</Badge>}
+          </div>
+          <div className="text-xs text-gray-400 mt-0.5 truncate">{item.productSku}</div>
+          <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
         </div>
-        <div className="text-xs text-gray-400 mt-0.5 truncate">{item.productSku}</div>
-        <StockBar qty={item.qty} reorderLevel={item.reorderLevel} />
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="text-right">
-          <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>{item.qty}</div>
-          <div className="text-xs text-gray-400">units</div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Qty display */}
+          <div className="text-right min-w-[40px]">
+            <div className={cn("text-lg font-semibold", isLow ? "text-red-600" : "text-gray-900")}>
+              {item.qty}
+            </div>
+            <div className="text-xs text-gray-400">units</div>
+          </div>
+
+          {/* Add / Remove buttons — admin/sales_rep only */}
+          {canEdit && (
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => setAdjustMode("add")}
+                title="Add stock"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5 text-green-700" />
+              </button>
+              <button
+                onClick={() => setAdjustMode("remove")}
+                title="Remove stock"
+                disabled={isOut}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Minus className="h-3.5 w-3.5 text-red-700" />
+              </button>
+            </div>
+          )}
+
+          {/* Delete button */}
+          {canEdit && (
+            <button
+              onClick={() => onDelete(item)}
+              title="Delete stock record"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4 text-gray-400" />
+            </button>
+          )}
         </div>
-        {canEdit && (
-          <button onClick={() => onDelete(item)} title="Delete stock record"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors">
-            <Trash2 className="h-4 w-4 text-gray-400" />
-          </button>
-        )}
       </div>
-    </div>
+
+      {/* Adjust modal */}
+      {adjustMode && (
+        <AdjustStockModal
+          item={item}
+          mode={adjustMode}
+          onClose={() => setAdjustMode(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -82,7 +260,7 @@ function StockRow({ item, canEdit, onDelete }: {
 
 function ProductModal({ existing, onClose }: { existing?: Product; onClose: () => void }) {
   const [name, setName] = useState(existing?.name ?? "");
-  const [brand, setBrand] = useState(existing?.brand ?? "MRF");
+  const [brand, setBrand] = useState(existing?.brand ?? "CEAT");
   const [customBrand, setCustom] = useState("");
   const [size, setSize] = useState(existing?.size ?? "");
   const [type, setType] = useState<TyreType>(existing?.type ?? "bike");
@@ -172,8 +350,8 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
             )}
           </div>
 
-          <Input label="Tyre size *"
-            placeholder={type === "bike" ? "e.g. 2.75-17" : "e.g. 400-8"}
+          <Input label="Tyre size & Pattern *"
+            placeholder={type === "bike" ? "e.g. 2.75-17 SECURA SPORT (R) " : "e.g. 400-8 BULAND"}
             value={size} onChange={e => setSize(e.target.value)} />
 
           <div>
