@@ -21,28 +21,28 @@ import type { Invoice, InvoiceStatus } from "@/types";
 const PAGE_SIZE = 20;
 
 const STATUS_OPTS = [
-  { value: "",          label: "All statuses" },
-  { value: "confirmed", label: "Confirmed"    },
-  { value: "delivered", label: "Delivered"    },
-  { value: "cancelled", label: "Cancelled"    },
+  { value: "", label: "All statuses" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
-const statusBadge: Record<InvoiceStatus, "success"|"info"|"danger"|"default"> = {
+const statusBadge: Record<InvoiceStatus, "success" | "info" | "danger" | "default"> = {
   confirmed: "info",
   delivered: "success",
   cancelled: "danger",
-  draft:     "default",
+  draft: "default",
 };
 
 export default function InvoicesPage() {
-  const { appUser }                 = useAuth();
-  const [invoices, setInvoices]     = useState<Invoice[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [statusFilter, setStatus]   = useState("");
-  const [search, setSearch]         = useState("");
-  const [lastDoc, setLastDoc]       = useState<QueryDocumentSnapshot | null>(null);
-  const [hasMore, setHasMore]       = useState(false);
-  const [toDelete, setToDelete]     = useState<Invoice | null>(null);
+  const { appUser } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [toDelete, setToDelete] = useState<Invoice | null>(null);
 
   const isAdmin = appUser?.role === "admin";
 
@@ -71,7 +71,7 @@ export default function InvoicesPage() {
         );
       }
       const snap = await getDocs(q);
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+      const docs = snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id } as Invoice; });
       setInvoices(reset ? docs : prev => [...prev, ...docs]);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -83,16 +83,16 @@ export default function InvoicesPage() {
   useEffect(() => { fetchInvoices(true); }, [statusFilter]);
 
   async function handleDelete(invoice: Invoice) {
-    await deleteDoc(doc(db, "invoices", invoice.id));
+    await deleteDoc(doc(collection(db, "invoices"), invoice.id));
     setInvoices(prev => prev.filter(i => i.id !== invoice.id));
     setToDelete(null);
   }
 
   const displayed = search
     ? invoices.filter(inv =>
-        inv.shopName.toLowerCase().includes(search.toLowerCase()) ||
-        inv.invoiceNo.toLowerCase().includes(search.toLowerCase())
-      )
+      inv.shopName.toLowerCase().includes(search.toLowerCase()) ||
+      inv.invoiceNo.toLowerCase().includes(search.toLowerCase())
+    )
     : invoices;
 
   return (

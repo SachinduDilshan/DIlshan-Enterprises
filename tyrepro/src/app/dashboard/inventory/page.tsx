@@ -27,7 +27,7 @@ import { Tabs } from "@/components/ui/Tabs";
 
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
-  { value: "kurunegala", label: "Polonnaruwa" },
+  { value: "kurunegala", label: "Kurunegala" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 const BRANDS = ["MRF", "CEAT", "Apollo", "Bridgestone", "TVS", "Bulland", "Other"];

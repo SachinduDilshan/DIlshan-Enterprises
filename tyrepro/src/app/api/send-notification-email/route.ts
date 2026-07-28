@@ -17,8 +17,7 @@ async function getAdmin() {
 
 // Email via Gmail SMTP using Nodemailer
 async function sendEmail(to: string, subject: string, html: string) {
-  const nodemailerPackage = "nodemailer";
-  const nodemailer = await import(nodemailerPackage);
+  const nodemailer = await import("nodemailer");
   const transporter = nodemailer.default.createTransport({
     service: "gmail",
     auth: {

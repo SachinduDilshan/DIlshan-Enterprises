@@ -119,21 +119,21 @@ async function seed() {
   // Admin user
   try {
     const userRecord = await auth.createUser({
-      email:       "admin@tyrepro.lk",
-      password:    "Admin@12345",
-      displayName: "Admin",
+      email:       "dilshanabeyrathne205@gmail.com",
+      password:    "Dila2001",
+      displayName: "Admin Dilshan",
     });
     await db.collection("users").doc(userRecord.uid).set({
       uid:         userRecord.uid,
-      email:       "admin@tyrepro.lk",
-      displayName: "Admin",
+      email:       "dilshanabeyrathne205@gmail.com",
+      displayName: "Admin Dilshan",
       role:        "admin",
       active:      true,
       createdAt:   now,
     });
     console.log("✅ Admin user created");
-    console.log("   Email:    admin@tyrepro.lk");
-    console.log("   Password: Admin@12345");
+    console.log("   Email:    dilshanabeyrathne205@gmail.com");
+    console.log("   Password: Dila2001");
     console.log("   ⚠️  Change this password after first login!");
   } catch (err) {
     if (err.code === "auth/email-already-exists") {
