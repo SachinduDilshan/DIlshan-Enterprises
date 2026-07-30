@@ -20,42 +20,52 @@ export async function GET(req: NextRequest) {
     const { db, Timestamp } = await getAdmin();
     const alerts: { type: string; message: string; count: number; items: string[] }[] = [];
 
-    // ── Low stock ─────────────────────────────────────────
-    const stockSnap = await db.collection("stock").get();
-    const lowStock  = stockSnap.docs
-      .map(d => d.data())
-      .filter(s => {
-        const qty    = typeof s.qty === "number" ? s.qty : 0;
-        const reorder = typeof s.reorderLevel === "number" ? s.reorderLevel : 10;
-        return qty <= reorder;
-      });
+    // Load valid product IDs first — only alert for products that still exist
+    const productsSnap  = await db.collection("products").where("active", "!=", false).get();
+    const validProductIds = new Set(productsSnap.docs.map(d => d.id));
 
-    const outOfStock = lowStock.filter(s => (typeof s.qty === "number" ? s.qty : 0) === 0);
-    const low        = lowStock.filter(s => (typeof s.qty === "number" ? s.qty : 0) > 0);
+    // Load stock — filter out records for deleted/inactive products
+    const stockSnap = await db.collection("stock").get();
+    const stockDocs = stockSnap.docs
+      .map(d => d.data())
+      .filter(s => validProductIds.has(s.productId));
+
+    const outOfStock = stockDocs.filter(s => {
+      const qty = typeof s.qty === "number" ? s.qty : 0;
+      return qty === 0;
+    });
+
+    const lowStock = stockDocs.filter(s => {
+      const qty     = typeof s.qty === "number" ? s.qty : 0;
+      const reorder = typeof s.reorderLevel === "number" ? s.reorderLevel : 10;
+      return qty > 0 && qty <= reorder;
+    });
 
     if (outOfStock.length > 0) {
       alerts.push({
         type:    "out_of_stock",
         message: "Products out of stock",
         count:   outOfStock.length,
-        items:   outOfStock.map(s => `${s.productName} — ${s.warehouseName}: 0 units`),
+        items:   outOfStock.map(s =>
+          `${s.productName} — ${s.warehouseName}: 0 units`
+        ),
       });
     }
 
-    if (low.length > 0) {
+    if (lowStock.length > 0) {
       alerts.push({
         type:    "low_stock",
         message: "Low stock items",
-        count:   low.length,
-        items:   low.map(s =>
+        count:   lowStock.length,
+        items:   lowStock.map(s =>
           `${s.productName} — ${s.warehouseName}: ${s.qty} units (min ${s.reorderLevel})`
         ),
       });
     }
 
-    // ── Write to Firestore ────────────────────────────────
+    // Always overwrite stock alert types — removes stale alerts for deleted products
     const existing = await db.collection("systemAlerts").doc("latest").get();
-    const prevAlerts: typeof alerts = existing.exists
+    const prevAlerts = existing.exists
       ? (existing.data()?.alerts ?? []).filter((a: any) =>
           a.type !== "low_stock" && a.type !== "out_of_stock"
         )
@@ -68,11 +78,7 @@ export async function GET(req: NextRequest) {
       generatedAt: Timestamp.now(),
     }, { merge: true });
 
-    return NextResponse.json({
-      success:     true,
-      alertsFound: alerts.length,
-      alerts,
-    });
+    return NextResponse.json({ success: true, alertsFound: alerts.length, alerts });
   } catch (err: any) {
     console.error("notify-stock error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
