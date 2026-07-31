@@ -1,5 +1,12 @@
 "use client";
 
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Button } from "@/components/ui/Button";
+import { EditButton } from "@/components/ui/EditButton";
+import { useAuth } from "@/hooks/useAuth";
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -15,17 +22,17 @@ import { ArrowLeft, FileText, Store, Calendar, CreditCard } from "lucide-react";
 import Link from "next/link";
 import type { Invoice, InvoiceItem, Cheque, InvoiceStatus, ChequeStatus } from "@/types";
 
-const STATUS_VARIANT: Record<InvoiceStatus, "default"|"info"|"success"|"danger"> = {
-  draft:     "default",
+const STATUS_VARIANT: Record<InvoiceStatus, "default" | "info" | "success" | "danger"> = {
+  draft: "default",
   confirmed: "info",
   delivered: "success",
   cancelled: "danger",
 };
 
-const CHEQUE_VARIANT: Record<ChequeStatus, "default"|"warning"|"success"|"danger"> = {
-  pending:   "warning",
+const CHEQUE_VARIANT: Record<ChequeStatus, "default" | "warning" | "success" | "danger"> = {
+  pending: "warning",
   deposited: "success",
-  bounced:   "danger",
+  bounced: "danger",
   cancelled: "default",
 };
 
@@ -33,9 +40,43 @@ export default function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [items, setItems]     = useState<InvoiceItem[]>([]);
-  const [cheque, setCheque]   = useState<Cheque | null>(null);
+  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [cheque, setCheque] = useState<Cheque | null>(null);
   const [loading, setLoading] = useState(true);
+
+
+  const { appUser } = useAuth();
+  const isAdmin = appUser?.role === "admin";
+  const [editInvoice, setEditInvoice] = useState(false);
+  const [invForm, setInvForm] = useState({
+    paymentType: invoice?.paymentType ?? "cash",
+    notes: invoice?.notes ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (invoice) {
+      setInvForm({
+        paymentType: invoice.paymentType,
+        notes: invoice.notes ?? "",
+      });
+    }
+  }, [invoice]);
+
+  async function handleSaveInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    if (!invoice) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "invoices", invoice.id), {
+        paymentType: invForm.paymentType,
+        notes: invForm.notes || null,
+        updatedAt: serverTimestamp(),
+      });
+      setEditInvoice(false);
+    } catch { }
+    finally { setSaving(false); }
+  }
 
   useEffect(() => {
     async function load() {
@@ -79,7 +120,7 @@ export default function InvoiceDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-medium text-gray-900">{invoice.invoiceNo}</h1>
+            <h1 className="text-lg font-medium text-gray-900">{invoice.invoiceNo}</h1>{isAdmin && <EditButton onClick={() => setEditInvoice(true)} />}
             <Badge variant={STATUS_VARIANT[invoice.status]}>{invoice.status}</Badge>
           </div>
           <p className="text-xs text-gray-400">{formatDate(invoice.invoiceDate)}</p>
@@ -174,6 +215,35 @@ export default function InvoiceDetailPage() {
           </div>
         )}
       </Card>
+
+      {editInvoice && (
+        <Modal title="Edit invoice" subtitle={invoice?.invoiceNo} onClose={() => setEditInvoice(false)} size="sm">
+          <form onSubmit={handleSaveInvoice} className="space-y-3">
+            <Dropdown
+              label="Payment type"
+              value={invForm.paymentType}
+              onChange={v => setInvForm(f => ({ ...f, paymentType: v }))}
+              options={[
+                { value: "cash", label: "Cash" },
+                { value: "cheque_15d", label: "Cheque (15 days)" },
+                { value: "cheque_30d", label: "Cheque (30 days)" },
+                { value: "cheque_60d", label: "Cheque (60 days)" },
+                { value: "cheque_90d", label: "Cheque (90 days)" },
+              ]}
+            />
+            <Input label="Notes (optional)" value={invForm.notes}
+              onChange={e => setInvForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Any notes about this invoice..." />
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+              Note: changing payment type does not automatically update associated cheques.
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" className="flex-1" type="button" onClick={() => setEditInvoice(false)}>Cancel</Button>
+              <Button className="flex-1" type="submit" loading={saving}>Save changes</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -1,5 +1,10 @@
 "use client";
 
+import { Pencil } from "lucide-react";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
@@ -150,10 +155,11 @@ function ReturnDetails({ uc }: { uc: UCReturn }) {
 
 // ── UC Return Card ────────────────────────────────────────
 
-function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
+function UCReturnCard({ uc, isAdmin, onAction, onDelete, onEdit }: {
   uc: UCReturn; isAdmin: boolean;
   onAction: (ucId: string, newStatus: UCReturnStatus, fields: Record<string, any>, prevStatus: UCReturnStatus, prevFields: Record<string, any>, message: string) => void;
   onDelete: (uc: UCReturn) => void;
+  onEdit: (uc: UCReturn) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const meta = STATUS_META[uc.status];
@@ -193,6 +199,16 @@ function UCReturnCard({ uc, isAdmin, onAction, onDelete }: {
             title="Delete UC return"
           >
             <Trash2 className="h-4 w-4 text-gray-400" />
+          </button>
+        )}
+
+        {isAdmin && (
+          <button
+            onClick={() => onEdit(uc)}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors mt-0.5"
+            title="Edit UC return"
+          >
+            <Pencil className="h-4 w-4 text-gray-400" />
           </button>
         )}
       </div>
@@ -299,7 +315,6 @@ function SummarySection({ returns }: { returns: UCReturn[] }) {
 type TabKey = "active" | "closed";
 
 export default function UCReturnsPage() {
-  const { appUser } = useAuth();
   const [returns, setReturns] = useState<UCReturn[]>([]);
   const [allReturns, setAllReturns] = useState<UCReturn[]>([]);
   const [loading, setLoading] = useState(true);
@@ -308,7 +323,40 @@ export default function UCReturnsPage() {
   const [toDelete, setToDelete] = useState<UCReturn | null>(null);
   const undoTimer = useRef<NodeJS.Timeout | null>(null);
 
+  const { appUser } = useAuth();
   const isAdmin = appUser?.role === "admin";
+
+  const [editUC, setEditUC] = useState<UCReturn | null>(null);
+  const [ucForm, setUcForm] = useState({ qty: 1, unitPrice: 0, reason: "sidewall_bulge", reasonNotes: "" });
+  const [editSaving, setEditSaving] = useState(false);
+
+  function openEditUC(uc: UCReturn) {
+    setUcForm({
+      qty: uc.qty,
+      unitPrice: (uc as any).unitPrice ?? 0,
+      reason: uc.reason,
+      reasonNotes: (uc as any).reasonNotes ?? "",
+    });
+    setEditUC(uc);
+  }
+
+  async function handleSaveUC(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editUC) return;
+    setEditSaving(true);
+    try {
+      await updateDoc(doc(ucReturnsCol, editUC.id), {
+        qty: ucForm.qty,
+        unitPrice: ucForm.unitPrice,
+        totalValue: ucForm.qty * ucForm.unitPrice,
+        reason: ucForm.reason,
+        reasonNotes: ucForm.reasonNotes.trim() || null,
+        updatedAt: serverTimestamp(),
+      });
+      setEditUC(null);
+    } catch { }
+    finally { setEditSaving(false); }
+  }
 
   useEffect(() => {
     const q = query(ucReturnsCol, orderBy("createdAt", "desc"));
@@ -405,6 +453,7 @@ export default function UCReturnsPage() {
           isAdmin={isAdmin}
           onAction={handleAction}
           onDelete={setToDelete}
+          onEdit={openEditUC}
         />
       ))}
 
@@ -417,6 +466,35 @@ export default function UCReturnsPage() {
           onConfirm={() => handleDelete(toDelete)}
           onCancel={() => setToDelete(null)}
         />
+      )}
+      {editUC && (
+        <Modal title="Edit UC return" subtitle={`${editUC.shopName} · ${editUC.productName}`} onClose={() => setEditUC(null)} size="sm">
+          <form onSubmit={handleSaveUC} className="space-y-3">
+            <Input label="Quantity returned *" type="number" min={1} value={ucForm.qty}
+              onChange={e => setUcForm(f => ({ ...f, qty: parseInt(e.target.value) || 1 }))} />
+            <Input label="Unit price (Rs) *" type="number" min={0} value={ucForm.unitPrice}
+              onChange={e => setUcForm(f => ({ ...f, unitPrice: parseFloat(e.target.value) || 0 }))} />
+            <Dropdown
+              label="Reason"
+              value={ucForm.reason}
+              onChange={v => setUcForm(f => ({ ...f, reason: v }))}
+              options={[
+                { value: "sidewall_bulge", label: "Sidewall bulge" },
+                { value: "tread_separation", label: "Tread separation" },
+                { value: "manufacturing_defect", label: "Manufacturing defect" },
+                { value: "bead_damage", label: "Bead damage" },
+                { value: "other", label: "Other" },
+              ]}
+            />
+            <Input label="Additional notes" value={ucForm.reasonNotes}
+              onChange={e => setUcForm(f => ({ ...f, reasonNotes: e.target.value }))}
+              placeholder="Any extra details..." />
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" className="flex-1" type="button" onClick={() => setEditUC(null)}>Cancel</Button>
+              <Button className="flex-1" type="submit" loading={editSaving}>Save changes</Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

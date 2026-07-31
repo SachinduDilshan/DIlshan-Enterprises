@@ -16,21 +16,49 @@ import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { formatLKR, formatDate } from "@/lib/utils";
 import {
   CalendarClock, CheckCircle, CalendarRange, History, Trash2,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cheque } from "@/types";
+import { Input } from "@/components/ui/Input";
 
 type TabKey = "due" | "all" | "deposited";
+
+
+const [editCheque, setEditCheque] = useState<Cheque | null>(null);
+const [chequeForm, setChequeForm] = useState({ bank: "", chequeNo: "", amount: 0 });
+const [editSaving, setEditSaving] = useState(false);
+
+function openEditCheque(cheque: Cheque) {
+  setChequeForm({ bank: cheque.bank, chequeNo: cheque.chequeNo, amount: cheque.amount });
+  setEditCheque(cheque);
+}
+
+async function handleSaveCheque(e: React.FormEvent) {
+  e.preventDefault();
+  if (!editCheque) return;
+  setEditSaving(true);
+  try {
+    await updateDoc(doc(collection(db, "cheques"), editCheque.id), {
+      bank: chequeForm.bank,
+      chequeNo: chequeForm.chequeNo,
+      amount: Number(chequeForm.amount),
+      updatedAt: serverTimestamp(),
+    });
+    setEditCheque(null);
+  } catch { }
+  finally { setEditSaving(false); }
+}
 
 function daysUntil(ts: Timestamp): number {
   return Math.ceil((ts.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 function urgencyBadge(days: number) {
-  if (days < 0)   return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
+  if (days < 0) return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
   if (days === 0) return <Badge variant="danger">Due today</Badge>;
-  if (days <= 2)  return <Badge variant="warning">Due in {days}d</Badge>;
-  if (days <= 5)  return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 2) return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 5) return <Badge variant="warning">Due in {days}d</Badge>;
   return <Badge variant="default">Due in {days}d</Badge>;
 }
 
@@ -42,28 +70,28 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
   const minStr = tomorrow.toISOString().split("T")[0];
 
   const [newDate, setNewDate] = useState(minStr);
-  const [reason, setReason]   = useState("");
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const QUICK_REASONS = ["Customer requested delay", "Bank issue", "Mutual agreement", "Other"];
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!newDate)        { setError("Select a new due date."); return; }
-    if (!reason.trim())  { setError("Reason is required."); return; }
+    if (!newDate) { setError("Select a new due date."); return; }
+    if (!reason.trim()) { setError("Reason is required."); return; }
     setSaving(true); setError("");
     try {
-      const newTs   = Timestamp.fromDate(new Date(newDate));
+      const newTs = Timestamp.fromDate(new Date(newDate));
       const chequeRef = doc(collection(db, "cheques"), cheque.id);
       await updateDoc(chequeRef, {
-        originalDueDate:  cheque.originalDueDate ?? cheque.dueDate,
-        dueDate:          newTs,
+        originalDueDate: cheque.originalDueDate ?? cheque.dueDate,
+        dueDate: newTs,
         rescheduledDates: arrayUnion({
-          from:   cheque.dueDate,
-          to:     newTs,
+          from: cheque.dueDate,
+          to: newTs,
           reason: reason.trim(),
-          at:     Timestamp.now(),
+          at: Timestamp.now(),
         }),
         updatedAt: serverTimestamp(),
       });
@@ -94,8 +122,8 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
               {currentDays < 0
                 ? ` (${Math.abs(currentDays)}d overdue)`
                 : currentDays === 0
-                ? " (today)"
-                : ` (${currentDays}d)`}
+                  ? " (today)"
+                  : ` (${currentDays}d)`}
             </span>
           </div>
           {cheque.originalDueDate && (
@@ -217,13 +245,13 @@ function RescheduleHistory({ cheque, onClose }: { cheque: Cheque; onClose: () =>
 // ── Main page ─────────────────────────────────────────────
 
 export default function ChequesPage() {
-  const { appUser }               = useAuth();
-  const [cheques, setCheques]     = useState<Cheque[]>([]);
-  const [allCheques, setAll]      = useState<Cheque[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [tab, setTab]             = useState<TabKey>("due");
+  const { appUser } = useAuth();
+  const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [allCheques, setAll] = useState<Cheque[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>("due");
   const [depositing, setDepositing] = useState<string | null>(null);
-  const [toDelete, setToDelete]   = useState<Cheque | null>(null);
+  const [toDelete, setToDelete] = useState<Cheque | null>(null);
   const [reschedule, setReschedule] = useState<Cheque | null>(null);
   const [viewHistory, setViewHistory] = useState<Cheque | null>(null);
 
@@ -252,24 +280,24 @@ export default function ChequesPage() {
     });
   }, []);
 
-  const dueSoon  = allCheques.filter(c => daysUntil(c.dueDate) <= 5);
+  const dueSoon = allCheques.filter(c => daysUntil(c.dueDate) <= 5);
   const displayed = tab === "due" ? dueSoon : cheques;
 
   const totalPending = allCheques.length;
-  const totalValue   = allCheques.reduce((s, c) => s + c.amount, 0);
+  const totalValue = allCheques.reduce((s, c) => s + c.amount, 0);
 
   async function markDeposited(cheque: Cheque) {
     setDepositing(cheque.id);
     try {
       const chequeRef = doc(collection(db, "cheques"), cheque.id);
       await updateDoc(chequeRef, {
-        status:      "deposited",
+        status: "deposited",
         depositedAt: serverTimestamp(),
-        updatedAt:   serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "shops", cheque.shopId), {
         outstandingBalance: increment(-cheque.amount),
-        updatedAt:          serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } finally {
       setDepositing(null);
@@ -316,8 +344,8 @@ export default function ChequesPage() {
         active={tab}
         onChange={k => setTab(k as TabKey)}
         options={[
-          { key: "due",       label: `Due soon (${dueSoon.length})` },
-          { key: "all",       label: `All pending (${totalPending})` },
+          { key: "due", label: `Due soon (${dueSoon.length})` },
+          { key: "all", label: `All pending (${totalPending})` },
           { key: "deposited", label: "Deposited" },
         ]}
       />
@@ -332,18 +360,18 @@ export default function ChequesPage() {
         <Card className="flex flex-col items-center py-12 text-center">
           <CalendarClock className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm text-gray-500">
-            {tab === "due"       ? "No cheques due in the next 5 days" :
-             tab === "all"       ? "No pending cheques" :
-             "No deposited cheques yet"}
+            {tab === "due" ? "No cheques due in the next 5 days" :
+              tab === "all" ? "No pending cheques" :
+                "No deposited cheques yet"}
           </p>
         </Card>
       )}
 
       <div className="space-y-3">
         {displayed.map(cheque => {
-          const days       = daysUntil(cheque.dueDate);
-          const isUrgent   = days <= 2;
-          const isOverdue  = days < 0;
+          const days = daysUntil(cheque.dueDate);
+          const isUrgent = days <= 2;
+          const isOverdue = days < 0;
           const hasHistory = (cheque.rescheduledDates ?? []).length > 0;
 
           return (
@@ -424,6 +452,15 @@ export default function ChequesPage() {
                       <Trash2 className="h-3.5 w-3.5 text-gray-400" />
                     </button>
                   )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => openEditCheque(cheque)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                      title="Edit cheque"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-gray-400" />
+                    </button>
+                  )}
                 </div>
               </div>
             </Card>
@@ -445,6 +482,26 @@ export default function ChequesPage() {
           onConfirm={() => handleDelete(toDelete)}
           onCancel={() => setToDelete(null)}
         />
+      )}
+
+      {editCheque && (
+        <Modal title="Edit cheque details" subtitle={`${editCheque.shopName} · ${formatLKR(editCheque.amount)}`} onClose={() => setEditCheque(null)} size="sm">
+          <form onSubmit={handleSaveCheque} className="space-y-3">
+            <Input label="Bank name *" value={chequeForm.bank}
+              onChange={e => setChequeForm(f => ({ ...f, bank: e.target.value }))} />
+            <Input label="Cheque number *" value={chequeForm.chequeNo}
+              onChange={e => setChequeForm(f => ({ ...f, chequeNo: e.target.value }))} />
+            <Input label="Amount (Rs) *" type="number" min={1} value={chequeForm.amount}
+              onChange={e => setChequeForm(f => ({ ...f, amount: Number(e.target.value) }))} />
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+              Editing amount here does not update the linked invoice total.
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" className="flex-1" type="button" onClick={() => setEditCheque(null)}>Cancel</Button>
+              <Button className="flex-1" type="submit" loading={editSaving}>Save changes</Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

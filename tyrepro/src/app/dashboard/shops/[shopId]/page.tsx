@@ -1,5 +1,10 @@
 "use client";
 
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { EditButton } from "@/components/ui/EditButton";
+import { useAuth } from "@/hooks/useAuth";
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -18,18 +23,60 @@ import Link from "next/link";
 import type { Shop, Invoice, Cheque } from "@/types";
 
 export default function ShopDetailPage() {
-  const { shopId } = useParams<{ shopId: string }>();
 
-  const [shop, setShop]           = useState<Shop | null>(null);
-  const [invoices, setInvoices]   = useState<Invoice[]>([]);
-  const [cheques, setCheques]     = useState<Cheque[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [tab, setTab]             = useState<"invoices" | "cheques">("invoices");
+
+  const { shopId } = useParams<{ shopId: string }>();
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"invoices" | "cheques">("invoices");
+
+  const { appUser } = useAuth();
+  const isAdmin = appUser?.role === "admin";
+  const [editShop, setEditShop] = useState(false);
+  const [form, setForm] = useState({
+    name: shop?.name ?? "",
+    ownerName: shop?.ownerName ?? "",
+    phone: shop?.phone ?? "",
+    address: shop?.address ?? "",
+    city: shop?.city ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (shop) {
+      setForm({
+        name: shop.name,
+        ownerName: shop.ownerName,
+        phone: shop.phone ?? "",
+        address: shop.address ?? "",
+        city: shop.city,
+      });
+    }
+  }, [shop]);
+
+  async function handleSaveShop(e: React.FormEvent) {
+    e.preventDefault();
+    if (!shop) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "shops", shop.id), {
+        ...form,
+        updatedAt: serverTimestamp(),
+      });
+      setEditShop(false);
+    } catch { }
+    finally { setSaving(false); }
+  }
+
+
+
 
   useEffect(() => {
     // Real-time shop doc
     const unsub = onSnapshot(doc(shopsCol, shopId), snap => {
-      if (snap.exists()) setShop({ id: snap.id, ...snap.data() } as Shop);
+      if (snap.exists()) setShop({ ...snap.data(), id: snap.id } as Shop);
     });
     return unsub;
   }, [shopId]);
@@ -45,7 +92,12 @@ export default function ShopDetailPage() {
           limit(20)
         )
       );
-      setInvoices(invSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)));
+      setInvoices(
+        invSnap.docs.map(d => {
+          const data = d.data() as Invoice;
+          return { ...data, id: d.id };
+        })
+      );
 
       // All pending cheques
       const cheqSnap = await getDocs(
@@ -55,7 +107,12 @@ export default function ShopDetailPage() {
           orderBy("dueDate", "asc")
         )
       );
-      setCheques(cheqSnap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque)));
+      setCheques(
+        cheqSnap.docs.map(d => {
+          const data = d.data() as Cheque;
+          return { ...data, id: d.id };
+        })
+      );
 
       setLoading(false);
     }
@@ -71,11 +128,11 @@ export default function ShopDetailPage() {
   }
 
   const pendingCheques = cheques.filter(c => c.status === "pending");
-  const pendingTotal   = pendingCheques.reduce((s, c) => s + c.amount, 0);
+  const pendingTotal = pendingCheques.reduce((s, c) => s + c.amount, 0);
 
   return (
     <div className="p-4 md:p-6 max-w-lg mx-auto pb-12">
-      {/* Back */}
+
       <div className="mb-5 flex items-center gap-3">
         <Link href="/dashboard/shops">
           <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
@@ -83,7 +140,7 @@ export default function ShopDetailPage() {
           </button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-lg font-medium text-gray-900">{shop.name}</h1>
+          <h1 className="text-lg font-medium text-gray-900">{shop.name}</h1>{isAdmin && <EditButton onClick={() => setEditShop(true)} />}
           <p className="text-xs text-gray-400">{shop.city} · {shop.assignedWarehouseId}</p>
         </div>
         <Link href={`/dashboard/invoices/new?shopId=${shop.id}`}>
@@ -138,9 +195,8 @@ export default function ShopDetailPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${
-              tab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${tab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
+              }`}
           >
             {t === "invoices" ? `Invoices (${invoices.length})` : `Cheques (${cheques.length})`}
           </button>
@@ -195,6 +251,28 @@ export default function ShopDetailPage() {
           ))}
         </Card>
       )}
+
+      {editShop && (
+        <Modal title="Edit shop details" onClose={() => setEditShop(false)} size="md">
+          <form onSubmit={handleSaveShop} className="space-y-3">
+            <Input label="Shop name *" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input label="Owner name *" value={form.ownerName}
+              onChange={e => setForm(f => ({ ...f, ownerName: e.target.value }))} />
+            <Input label="Phone" value={form.phone}
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <Input label="City *" value={form.city}
+              onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+            <Input label="Address" value={form.address}
+              onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" className="flex-1" type="button" onClick={() => setEditShop(false)}>Cancel</Button>
+              <Button className="flex-1" type="submit" loading={saving}>Save changes</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
     </div>
   );
 }

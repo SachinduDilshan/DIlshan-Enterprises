@@ -18,80 +18,83 @@ const NAV_SECTIONS = [
   {
     label: "Main",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "sales_rep", "driver"] },
-      { href: "/dashboard/shops", label: "Shops", icon: Store, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/invoices", label: "Invoices", icon: FileText, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/cheques", label: "Cheques", icon: CalendarClock, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard",          label: "Dashboard", icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
+      { href: "/dashboard/shops",    label: "Shops",     icon: Store,           roles: ["admin","sales_rep"]          },
+      { href: "/dashboard/invoices", label: "Invoices",  icon: FileText,        roles: ["admin","sales_rep"]          },
+      { href: "/dashboard/cheques",  label: "Cheques",   icon: CalendarClock,   roles: ["admin","sales_rep"]          },
     ],
   },
   {
     label: "Operations",
     items: [
-      { href: "/dashboard/inventory", label: "Inventory", icon: Package, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/dispatch", label: "Dispatch", icon: Truck, roles: ["admin", "sales_rep", "driver"] },
+      { href: "/dashboard/inventory",  label: "Inventory",  icon: Package,   roles: ["admin","sales_rep"]          },
+      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin","sales_rep"]          },
+      { href: "/dashboard/dispatch",   label: "Dispatch",   icon: Truck,     roles: ["admin","sales_rep","driver"] },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "/dashboard/reports", label: "Reports", icon: BarChart3, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: ["admin"] },
+      { href: "/dashboard/reports",  label: "Reports",  icon: BarChart3, roles: ["admin","sales_rep"] },
+      { href: "/dashboard/settings", label: "Settings", icon: Settings,  roles: ["admin"]             },
     ],
   },
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname    = usePathname();
   const { appUser } = useAuth();
-  const role = appUser?.role ?? "sales_rep";
+  const role        = appUser?.role ?? "sales_rep";
   const canSeeAlerts = role === "admin" || role === "sales_rep";
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
 
   async function handleSignOut() {
     await signOut(auth);
     window.location.href = "/login";
   }
 
+  function isActive(href: string) {
+    return href === "/dashboard"
+      ? pathname === href
+      : pathname === href || pathname.startsWith(href + "/");
+  }
+
   return (
-    <aside className="flex h-full w-full flex-col bg-brand-700">
-      {/* Brand + bell */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
+    <aside className="flex h-full w-full flex-col" style={{ background: "#2D2B55" }}>
+      {/* Brand */}
+      <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
         <div>
-          <span className="text-sm font-medium text-white leading-tight block">
-            Dilshan Enterprises
-          </span>
-          <span className="text-xs text-white/50 leading-tight block">
-            Tire Distributors
-          </span>
+          <p className="text-sm font-medium text-white leading-tight">Dilshan Enterprises</p>
+          <p className="text-[11px] text-white/40 leading-tight">Tire Distributors</p>
         </div>
         {canSeeAlerts && <NotificationBell position="sidebar" />}
       </div>
 
-      {/* Nav sections */}
+      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2">
         {NAV_SECTIONS.map(section => {
           const items = section.items.filter(item => item.roles.includes(role));
           if (items.length === 0) return null;
           return (
             <div key={section.label}>
-              <p className="px-4 pt-4 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-white/35">
+              <p className="px-4 pt-4 pb-1 text-[10px] font-medium uppercase tracking-wider text-white/30">
                 {section.label}
               </p>
               {items.map(({ href, label, icon: Icon }) => {
-                const active = href === "/dashboard"
-                  ? pathname === href
-                  : pathname === href || pathname.startsWith(href + "/");
+                const active = isActive(href);
                 return (
                   <Link key={href} href={href}
                     className={cn(
-                      "flex items-center gap-3 mx-2 my-0.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      "flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors relative",
                       active
-                        ? "bg-white/15 text-white"
-                        : "text-white/65 hover:bg-white/8 hover:text-white"
+                        ? "text-white bg-white/10"
+                        : "text-white/55 hover:text-white/80 hover:bg-white/5"
                     )}>
+                    {active && (
+                      <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-300 rounded-r" />
+                    )}
                     <Icon className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1">{label}</span>
+                    {label}
                   </Link>
                 );
               })}
@@ -100,38 +103,36 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User row */}
-      <div className="border-t border-white/10 p-2">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/8 transition-colors">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white flex-shrink-0">
+      {/* User */}
+      <div className="border-t border-white/10 px-3 py-3">
+        <div className="flex items-center gap-2.5 px-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/40 text-[11px] font-medium text-white flex-shrink-0">
             {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate text-xs font-medium text-white">
-              {appUser?.displayName ?? "User"}
-            </p>
-            <p className="text-[10px] text-white/45 capitalize">
-              {appUser?.role?.replace("_", " ")}
-            </p>
+            <p className="text-[12px] font-medium text-white truncate">{appUser?.displayName}</p>
+            <p className="text-[10px] text-white/40 capitalize">{appUser?.role?.replace("_"," ")}</p>
           </div>
-          <button onClick={() => setShowLogoutConfirm(true)} title="Sign out"
-            className="text-white/40 hover:text-white transition-colors">
-            <LogOut className="h-4 w-4" />
+          <button
+            onClick={() => setShowLogout(true)}
+            title="Sign out"
+            className="text-white/30 hover:text-white/70 transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Logout confirmation */}
-      {showLogoutConfirm && (
+      {showLogout && (
         <ConfirmDialog
           title="Sign out?"
-          description={`You're signed in as ${appUser?.displayName ?? "User"}. You'll need to log in again to access TyrePro.`}
+          description={`You are signed in as ${appUser?.displayName}. You will need to log in again to access TyrePro.`}
           confirmLabel="Sign out"
           icon={LogOut}
-          iconBg="bg-danger-50"
-          iconColor="text-danger-500"
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
           onConfirm={handleSignOut}
-          onCancel={() => setShowLogoutConfirm(false)}
+          onCancel={() => setShowLogout(false)}
         />
       )}
     </aside>
