@@ -99,6 +99,7 @@ export interface Shop {
 }
 
 export interface Invoice {
+  notes: string;
   id: string;
   invoiceNo: string;
   shopId: string;

@@ -11,6 +11,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   doc, getDoc, getDocs, query, orderBy, onSnapshot,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { invoicesCol, invoiceItemsCol, chequesCol } from "@/lib/firestore-collections";
 import { collection, where } from "firebase/firestore";
@@ -222,7 +224,7 @@ export default function InvoiceDetailPage() {
             <Dropdown
               label="Payment type"
               value={invForm.paymentType}
-              onChange={v => setInvForm(f => ({ ...f, paymentType: v }))}
+              onChange={v => setInvForm(f => ({ ...f, paymentType: v as any }))}
               options={[
                 { value: "cash", label: "Cash" },
                 { value: "cheque_15d", label: "Cheque (15 days)" },

@@ -3,62 +3,37 @@
 import { useEffect, useState } from "react";
 import {
   collection, query, where, orderBy, onSnapshot,
-  doc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, increment,
+  doc, updateDoc, deleteDoc, serverTimestamp,
+  Timestamp, arrayUnion, increment,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { formatLKR, formatDate } from "@/lib/utils";
 import {
-  CalendarClock, CheckCircle, CalendarRange, History, Trash2,
-  Pencil,
+  CalendarClock, CheckCircle, CalendarRange,
+  History, Trash2, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cheque } from "@/types";
-import { Input } from "@/components/ui/Input";
 
 type TabKey = "due" | "all" | "deposited";
-
-
-const [editCheque, setEditCheque] = useState<Cheque | null>(null);
-const [chequeForm, setChequeForm] = useState({ bank: "", chequeNo: "", amount: 0 });
-const [editSaving, setEditSaving] = useState(false);
-
-function openEditCheque(cheque: Cheque) {
-  setChequeForm({ bank: cheque.bank, chequeNo: cheque.chequeNo, amount: cheque.amount });
-  setEditCheque(cheque);
-}
-
-async function handleSaveCheque(e: React.FormEvent) {
-  e.preventDefault();
-  if (!editCheque) return;
-  setEditSaving(true);
-  try {
-    await updateDoc(doc(collection(db, "cheques"), editCheque.id), {
-      bank: chequeForm.bank,
-      chequeNo: chequeForm.chequeNo,
-      amount: Number(chequeForm.amount),
-      updatedAt: serverTimestamp(),
-    });
-    setEditCheque(null);
-  } catch { }
-  finally { setEditSaving(false); }
-}
 
 function daysUntil(ts: Timestamp): number {
   return Math.ceil((ts.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 function urgencyBadge(days: number) {
-  if (days < 0) return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
+  if (days < 0)  return <Badge variant="danger">Overdue {Math.abs(days)}d</Badge>;
   if (days === 0) return <Badge variant="danger">Due today</Badge>;
-  if (days <= 2) return <Badge variant="warning">Due in {days}d</Badge>;
-  if (days <= 5) return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 2)  return <Badge variant="warning">Due in {days}d</Badge>;
+  if (days <= 5)  return <Badge variant="warning">Due in {days}d</Badge>;
   return <Badge variant="default">Due in {days}d</Badge>;
 }
 
@@ -70,28 +45,28 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
   const minStr = tomorrow.toISOString().split("T")[0];
 
   const [newDate, setNewDate] = useState(minStr);
-  const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [reason, setReason]   = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState("");
 
   const QUICK_REASONS = ["Customer requested delay", "Bank issue", "Mutual agreement", "Other"];
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!newDate) { setError("Select a new due date."); return; }
+    if (!newDate)       { setError("Select a new due date."); return; }
     if (!reason.trim()) { setError("Reason is required."); return; }
     setSaving(true); setError("");
     try {
-      const newTs = Timestamp.fromDate(new Date(newDate));
+      const newTs     = Timestamp.fromDate(new Date(newDate));
       const chequeRef = doc(collection(db, "cheques"), cheque.id);
       await updateDoc(chequeRef, {
-        originalDueDate: cheque.originalDueDate ?? cheque.dueDate,
-        dueDate: newTs,
+        originalDueDate:  cheque.originalDueDate ?? cheque.dueDate,
+        dueDate:          newTs,
         rescheduledDates: arrayUnion({
-          from: cheque.dueDate,
-          to: newTs,
+          from:   cheque.dueDate,
+          to:     newTs,
           reason: reason.trim(),
-          at: Timestamp.now(),
+          at:     Timestamp.now(),
         }),
         updatedAt: serverTimestamp(),
       });
@@ -113,7 +88,6 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
       size="sm"
     >
       <form onSubmit={handleSave} className="space-y-4">
-        {/* Current info */}
         <div className="rounded-xl bg-gray-50 px-4 py-3 space-y-1.5">
           <div className="flex justify-between text-xs">
             <span className="text-gray-500">Current due date</span>
@@ -121,9 +95,8 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
               {formatDate(cheque.dueDate)}
               {currentDays < 0
                 ? ` (${Math.abs(currentDays)}d overdue)`
-                : currentDays === 0
-                  ? " (today)"
-                  : ` (${currentDays}d)`}
+                : currentDays === 0 ? " (today)"
+                : ` (${currentDays}d)`}
             </span>
           </div>
           {cheque.originalDueDate && (
@@ -135,31 +108,25 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
           {(cheque.rescheduledDates ?? []).length > 0 && (
             <div className="flex items-center gap-1 text-xs text-amber-700">
               <History className="h-3 w-3" />
-              Rescheduled {(cheque.rescheduledDates ?? []).length} time
-              {(cheque.rescheduledDates ?? []).length > 1 ? "s" : ""} before
+              Rescheduled {(cheque.rescheduledDates ?? []).length} time{(cheque.rescheduledDates ?? []).length > 1 ? "s" : ""} before
             </div>
           )}
         </div>
 
-        {/* New date */}
         <div>
           <label className="text-sm font-medium text-gray-700 mb-1 block">New due date *</label>
           <input
-            type="date"
-            min={minStr}
-            value={newDate}
+            type="date" min={minStr} value={newDate}
             onChange={e => setNewDate(e.target.value)}
             className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
           />
         </div>
 
-        {/* Reason */}
         <div>
           <label className="text-sm font-medium text-gray-700 mb-2 block">Reason *</label>
           <div className="flex flex-wrap gap-2 mb-2">
             {QUICK_REASONS.map(r => (
-              <button key={r} type="button"
-                onClick={() => setReason(r)}
+              <button key={r} type="button" onClick={() => setReason(r)}
                 className={cn(
                   "rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors",
                   reason === r
@@ -178,17 +145,11 @@ function RescheduleModal({ cheque, onClose }: { cheque: Cheque; onClose: () => v
           />
         </div>
 
-        {error && (
-          <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
-        )}
+        {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
 
         <div className="flex gap-3 pt-1">
-          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button className="flex-1" type="submit" loading={saving}>
-            Reschedule
-          </Button>
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" type="submit" loading={saving}>Reschedule</Button>
         </div>
       </form>
     </Modal>
@@ -215,7 +176,6 @@ function RescheduleHistory({ cheque, onClose }: { cheque: Cheque; onClose: () =>
             <p className="text-sm font-medium text-gray-900">{formatDate(cheque.originalDueDate)}</p>
           </div>
         )}
-
         {(cheque.rescheduledDates ?? []).map((r, i) => (
           <div key={i} className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
             <div className="flex items-center justify-between mb-1.5">
@@ -230,14 +190,75 @@ function RescheduleHistory({ cheque, onClose }: { cheque: Cheque; onClose: () =>
             <p className="text-xs text-amber-700">Reason: {r.reason}</p>
           </div>
         ))}
-
         <div className="flex items-center justify-between rounded-xl bg-brand-50 px-3 py-2.5">
           <p className="text-xs font-medium text-brand-800">Current due date</p>
           <p className="text-sm font-medium text-brand-900">{formatDate(cheque.dueDate)}</p>
         </div>
-
         <Button variant="secondary" className="w-full" onClick={onClose}>Close</Button>
       </div>
+    </Modal>
+  );
+}
+
+// ── Edit cheque modal ─────────────────────────────────────
+
+function EditChequeModal({ cheque, onClose }: { cheque: Cheque; onClose: () => void }) {
+  const [bank, setBank]         = useState(cheque.bank);
+  const [chequeNo, setChequeNo] = useState(cheque.chequeNo);
+  const [amount, setAmount]     = useState(cheque.amount);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!bank.trim())     { setError("Bank name is required."); return; }
+    if (!chequeNo.trim()) { setError("Cheque number is required."); return; }
+    if (amount <= 0)      { setError("Amount must be greater than 0."); return; }
+    setSaving(true); setError("");
+    try {
+      await updateDoc(doc(collection(db, "cheques"), cheque.id), {
+        bank:      bank.trim(),
+        chequeNo:  chequeNo.trim(),
+        amount:    Number(amount),
+        updatedAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Edit cheque details"
+      subtitle={`${cheque.shopName} · ${cheque.invoiceNo}`}
+      onClose={onClose}
+      size="sm"
+    >
+      <form onSubmit={handleSave} className="space-y-3">
+        <Input label="Bank name *" value={bank}
+          onChange={e => setBank(e.target.value)}
+          placeholder="e.g. People's Bank" />
+        <Input label="Cheque number *" value={chequeNo}
+          onChange={e => setChequeNo(e.target.value)}
+          placeholder="e.g. 64020" />
+        <Input label="Amount (Rs) *" type="number" min={1}
+          value={amount || ""}
+          onChange={e => setAmount(Number(e.target.value))}
+          placeholder="e.g. 959600" />
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+          Editing the amount here does not update the linked invoice total.
+        </div>
+        {error && (
+          <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
+        )}
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" type="submit" loading={saving}>Save changes</Button>
+        </div>
+      </form>
     </Modal>
   );
 }
@@ -245,18 +266,19 @@ function RescheduleHistory({ cheque, onClose }: { cheque: Cheque; onClose: () =>
 // ── Main page ─────────────────────────────────────────────
 
 export default function ChequesPage() {
-  const { appUser } = useAuth();
-  const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [allCheques, setAll] = useState<Cheque[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TabKey>("due");
-  const [depositing, setDepositing] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<Cheque | null>(null);
-  const [reschedule, setReschedule] = useState<Cheque | null>(null);
-  const [viewHistory, setViewHistory] = useState<Cheque | null>(null);
+  const { appUser }   = useAuth();
+  const isAdmin       = appUser?.role === "admin";
+  const canEdit       = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
-  const isAdmin = appUser?.role === "admin";
-  const canEdit = appUser?.role === "admin" || appUser?.role === "sales_rep";
+  const [cheques, setCheques]           = useState<Cheque[]>([]);
+  const [allCheques, setAll]            = useState<Cheque[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [tab, setTab]                   = useState<TabKey>("due");
+  const [depositing, setDepositing]     = useState<string | null>(null);
+  const [toDelete, setToDelete]         = useState<Cheque | null>(null);
+  const [reschedule, setReschedule]     = useState<Cheque | null>(null);
+  const [viewHistory, setViewHistory]   = useState<Cheque | null>(null);
+  const [editCheque, setEditCheque]     = useState<Cheque | null>(null);
 
   // Main list — changes by tab
   useEffect(() => {
@@ -265,7 +287,10 @@ export default function ChequesPage() {
       : query(collection(db, "cheques"), where("status", "==", "pending"), orderBy("dueDate", "asc"));
 
     const unsub = onSnapshot(q, snap => {
-      const docs = snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id } as Cheque; });
+      const docs = snap.docs.map(d => {
+        const data = d.data();
+        return { ...data, id: d.id } as Cheque;
+      });
       setCheques(docs);
       setLoading(false);
     });
@@ -276,28 +301,31 @@ export default function ChequesPage() {
   useEffect(() => {
     const q = query(collection(db, "cheques"), where("status", "==", "pending"), orderBy("dueDate", "asc"));
     return onSnapshot(q, snap => {
-      setAll(snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id } as Cheque; }));
+      setAll(snap.docs.map(d => {
+        const data = d.data();
+        return { ...data, id: d.id } as Cheque;
+      }));
     });
   }, []);
 
-  const dueSoon = allCheques.filter(c => daysUntil(c.dueDate) <= 5);
+  const dueSoon  = allCheques.filter(c => daysUntil(c.dueDate) <= 5);
   const displayed = tab === "due" ? dueSoon : cheques;
 
   const totalPending = allCheques.length;
-  const totalValue = allCheques.reduce((s, c) => s + c.amount, 0);
+  const totalValue   = allCheques.reduce((s, c) => s + c.amount, 0);
 
   async function markDeposited(cheque: Cheque) {
     setDepositing(cheque.id);
     try {
       const chequeRef = doc(collection(db, "cheques"), cheque.id);
       await updateDoc(chequeRef, {
-        status: "deposited",
+        status:      "deposited",
         depositedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        updatedAt:   serverTimestamp(),
       });
       await updateDoc(doc(db, "shops", cheque.shopId), {
         outstandingBalance: increment(-cheque.amount),
-        updatedAt: serverTimestamp(),
+        updatedAt:          serverTimestamp(),
       });
     } finally {
       setDepositing(null);
@@ -344,9 +372,9 @@ export default function ChequesPage() {
         active={tab}
         onChange={k => setTab(k as TabKey)}
         options={[
-          { key: "due", label: `Due soon (${dueSoon.length})` },
-          { key: "all", label: `All pending (${totalPending})` },
-          { key: "deposited", label: "Deposited" },
+          { key: "due",       label: `Due soon (${dueSoon.length})`  },
+          { key: "all",       label: `All pending (${totalPending})` },
+          { key: "deposited", label: "Deposited"                     },
         ]}
       />
 
@@ -360,18 +388,18 @@ export default function ChequesPage() {
         <Card className="flex flex-col items-center py-12 text-center">
           <CalendarClock className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm text-gray-500">
-            {tab === "due" ? "No cheques due in the next 5 days" :
-              tab === "all" ? "No pending cheques" :
-                "No deposited cheques yet"}
+            {tab === "due"       ? "No cheques due in the next 5 days" :
+             tab === "all"       ? "No pending cheques" :
+             "No deposited cheques yet"}
           </p>
         </Card>
       )}
 
       <div className="space-y-3">
         {displayed.map(cheque => {
-          const days = daysUntil(cheque.dueDate);
-          const isUrgent = days <= 2;
-          const isOverdue = days < 0;
+          const days       = daysUntil(cheque.dueDate);
+          const isUrgent   = days <= 2;
+          const isOverdue  = days < 0;
           const hasHistory = (cheque.rescheduledDates ?? []).length > 0;
 
           return (
@@ -443,24 +471,26 @@ export default function ChequesPage() {
                     <Badge variant="success">Deposited</Badge>
                   )}
 
-                  {isAdmin && (
-                    <button
-                      onClick={() => setToDelete(cheque)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-gray-400" />
-                    </button>
-                  )}
-                  {isAdmin && (
-                    <button
-                      onClick={() => openEditCheque(cheque)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors"
-                      title="Edit cheque"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-gray-400" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {isAdmin && (
+                      <button
+                        onClick={() => setEditCheque(cheque)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                        title="Edit cheque"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-gray-400" />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setToDelete(cheque)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+                        title="Delete cheque"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
@@ -469,39 +499,16 @@ export default function ChequesPage() {
       </div>
 
       {/* Modals */}
-      {reschedule && (
-        <RescheduleModal cheque={reschedule} onClose={() => setReschedule(null)} />
-      )}
-      {viewHistory && (
-        <RescheduleHistory cheque={viewHistory} onClose={() => setViewHistory(null)} />
-      )}
-      {toDelete && (
+      {reschedule  && <RescheduleModal   cheque={reschedule}  onClose={() => setReschedule(null)}  />}
+      {viewHistory && <RescheduleHistory cheque={viewHistory} onClose={() => setViewHistory(null)} />}
+      {editCheque  && <EditChequeModal   cheque={editCheque}  onClose={() => setEditCheque(null)}  />}
+      {toDelete    && (
         <DeleteConfirmDialog
           title="Delete cheque"
           description={`${toDelete.shopName} · ${toDelete.bank} #${toDelete.chequeNo}\n${formatLKR(toDelete.amount)} · Due: ${formatDate(toDelete.dueDate)}`}
           onConfirm={() => handleDelete(toDelete)}
           onCancel={() => setToDelete(null)}
         />
-      )}
-
-      {editCheque && (
-        <Modal title="Edit cheque details" subtitle={`${editCheque.shopName} · ${formatLKR(editCheque.amount)}`} onClose={() => setEditCheque(null)} size="sm">
-          <form onSubmit={handleSaveCheque} className="space-y-3">
-            <Input label="Bank name *" value={chequeForm.bank}
-              onChange={e => setChequeForm(f => ({ ...f, bank: e.target.value }))} />
-            <Input label="Cheque number *" value={chequeForm.chequeNo}
-              onChange={e => setChequeForm(f => ({ ...f, chequeNo: e.target.value }))} />
-            <Input label="Amount (Rs) *" type="number" min={1} value={chequeForm.amount}
-              onChange={e => setChequeForm(f => ({ ...f, amount: Number(e.target.value) }))} />
-            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
-              Editing amount here does not update the linked invoice total.
-            </div>
-            <div className="flex gap-3 pt-1">
-              <Button variant="secondary" className="flex-1" type="button" onClick={() => setEditCheque(null)}>Cancel</Button>
-              <Button className="flex-1" type="submit" loading={editSaving}>Save changes</Button>
-            </div>
-          </form>
-        </Modal>
       )}
     </div>
   );
