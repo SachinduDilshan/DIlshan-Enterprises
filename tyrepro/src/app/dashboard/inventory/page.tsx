@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { useNotifications } from "@/hooks/useNotifications";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import {
@@ -46,14 +47,14 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   );
 }
 
-function AdjustStockModal({ item, mode, onClose }: {
-  item: Stock; mode: "add" | "remove"; onClose: () => void;
+function AdjustStockModal({ item, mode, onClose, onStockChanged }: {
+  item: Stock; mode: "add" | "remove"; onClose: () => void; onStockChanged: () => void;
 }) {
-  const [qty, setQty]       = useState(1);
+  const [qty, setQty] = useState(1);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState("");
-  const maxRemove           = item.qty;
+  const [error, setError] = useState("");
+  const maxRemove = item.qty;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,24 +65,25 @@ function AdjustStockModal({ item, mode, onClose }: {
     setSaving(true); setError("");
     try {
       await runTransaction(db, async tx => {
-        const ref  = doc(stockCol, item.id);
+        const ref = doc(stockCol, item.id);
         const snap = await tx.get(ref);
         if (!snap.exists()) throw new Error("Stock record not found.");
         const current = (snap.data() as Stock).qty ?? 0;
-        const newQty  = mode === "add" ? current + qty : Math.max(0, current - qty);
+        const newQty = mode === "add" ? current + qty : Math.max(0, current - qty);
         tx.update(ref, { qty: newQty, updatedAt: serverTimestamp() });
       });
       await addDoc(collection(db, "stockAdjustments"), {
-        stockId:       item.id,
-        warehouseId:   item.warehouseId,
+        stockId: item.id,
+        warehouseId: item.warehouseId,
         warehouseName: item.warehouseName,
-        productId:     item.productId,
-        productName:   item.productName,
+        productId: item.productId,
+        productName: item.productName,
         mode,
         qty,
         reason: reason.trim() || null,
         adjustedAt: serverTimestamp(),
       });
+      onStockChanged();
       onClose();
     } catch (err: any) {
       setError(err.message);
@@ -181,8 +183,10 @@ function AdjustStockModal({ item, mode, onClose }: {
 
 // ── Stock row ─────────────────────────────────────────────
 
-function StockRow({ item, canEdit, onDelete }: {
-  item: Stock; canEdit: boolean; onDelete: (item: Stock) => void;
+function StockRow({ item, canEdit, onDelete, onStockChanged }: {
+  item: Stock; canEdit: boolean;
+  onDelete: (item: Stock) => void;
+  onStockChanged: () => void;
 }) {
   const [adjustMode, setAdjustMode] = useState<"add" | "remove" | null>(null);
   const isLow = item.qty <= item.reorderLevel;
@@ -194,7 +198,7 @@ function StockRow({ item, canEdit, onDelete }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-gray-900 truncate">{item.productName}</span>
-            {isOut  && <Badge variant="danger">Out of stock</Badge>}
+            {isOut && <Badge variant="danger">Out of stock</Badge>}
             {!isOut && isLow && <Badge variant="warning">Low</Badge>}
           </div>
           <div className="text-xs text-gray-400 mt-0.5 truncate">{item.productSku}</div>
@@ -250,6 +254,7 @@ function StockRow({ item, canEdit, onDelete }: {
           item={item}
           mode={adjustMode}
           onClose={() => setAdjustMode(null)}
+          onStockChanged={onStockChanged}
         />
       )}
     </>
@@ -388,7 +393,11 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
 
 // ── Add stock modal ───────────────────────────────────────
 
-function AddStockModal({ products, onClose }: { products: Product[]; onClose: () => void }) {
+function AddStockModal({ products, onClose, onStockChanged }: {
+  products: Product[];
+  onClose: () => void;
+  onStockChanged: () => void;
+}) {
   const [productId, setProductId] = useState("");
   const [warehouseId, setWh] = useState("anuradhapura");
   const [qty, setQty] = useState(0);
@@ -422,6 +431,7 @@ function AddStockModal({ products, onClose }: { products: Product[]; onClose: ()
           });
         }
       });
+      onStockChanged(); // ← trigger alert refresh
       onClose();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
@@ -542,6 +552,8 @@ export default function InventoryPage() {
   const canEdit = appUser?.role === "admin" || appUser?.role === "sales_rep";
   const isAdmin = appUser?.role === "admin";
 
+  const { refreshAlerts } = useNotifications();
+
   const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
   const [warehouseId, setWarehouseId] = useState("");
   const [search, setSearch] = useState("");
@@ -568,6 +580,12 @@ export default function InventoryPage() {
   async function handleDeleteProduct(p: Product) {
     await deleteDoc(doc(productsCol, p.id));
     setDeleteProduct(undefined);
+  }
+
+  async function handleStockChanged() {
+    // Give Firestore a moment to propagate, then re-run alert checks
+    await new Promise(r => setTimeout(r, 1500));
+    await refreshAlerts();
   }
 
   async function handleDeleteStock(s: Stock) {
@@ -732,7 +750,13 @@ export default function InventoryPage() {
                   </div>
                   <div className="px-4">
                     {items.map(item => (
-                      <StockRow key={item.id} item={item} canEdit={canEdit} onDelete={setDeleteStock} />
+                      <StockRow
+                        key={item.id}
+                        item={item}
+                        canEdit={canEdit}
+                        onDelete={setDeleteStock}
+                        onStockChanged={handleStockChanged}
+                      />
                     ))}
                   </div>
                 </Card>
@@ -811,7 +835,13 @@ export default function InventoryPage() {
 
       {/* Modals */}
       {showTransfer && <TransferModal stock={stock} onClose={() => setShowTransfer(false)} />}
-      {showAddStock && <AddStockModal products={products.filter(p => p.active !== false)} onClose={() => setShowAddStock(false)} />}
+      {showAddStock && (
+        <AddStockModal
+          products={products.filter(p => p.active !== false)}
+          onClose={() => setShowAddStock(false)}
+          onStockChanged={handleStockChanged}
+        />
+      )}
       {showAddProduct && <ProductModal onClose={() => setShowAddProduct(false)} />}
       {editProduct && <ProductModal existing={editProduct} onClose={() => setEditProduct(undefined)} />}
       {deleteProduct && (
