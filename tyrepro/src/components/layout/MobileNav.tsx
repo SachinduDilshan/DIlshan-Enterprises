@@ -20,7 +20,6 @@ export function MobileNav() {
 
   useEffect(() => setMounted(true), []);
 
-  // Primary 5 tabs (no Alerts — bell already lives in top header)
   const tabs = [
     { href: "/dashboard", label: "Home", icon: LayoutDashboard, roles: ["admin", "sales_rep", "driver"] },
     { href: "/dashboard/invoices", label: "Invoice", icon: FileText, roles: ["admin", "sales_rep"] },
