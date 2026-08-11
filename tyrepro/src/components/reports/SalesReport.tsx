@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   collection, query, where, getDocs,
   orderBy, Timestamp,
@@ -13,6 +13,7 @@ import { formatLKR, formatDate } from "@/lib/utils";
 import {
   TrendingUp, FileText, CreditCard, Banknote,
   Download, FileSpreadsheet, Calendar,
+  ChevronDown,
 } from "lucide-react";
 import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import { cn } from "@/lib/utils";
@@ -126,6 +127,150 @@ function StatCard({ icon: Icon, bg, fg, label, value, loading }: {
   );
 }
 
+
+function PeriodSelector({
+  value,
+  onChange,
+  customFrom,
+  customTo,
+  onCustomFromChange,
+  onCustomToChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  customFrom: string;
+  customTo: string;
+  onCustomFromChange: (v: string) => void;
+  onCustomToChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const PRESETS = [
+    { value: "today", label: "Today" },
+    { value: "yesterday", label: "Yesterday" },
+    { value: "week", label: "Last 7 days" },
+    { value: "month", label: "This month" },
+    { value: "lastmonth", label: "Last month" },
+    { value: "quarter", label: "This quarter" },
+    { value: "year", label: "This year" },
+    { value: "lastyear", label: "Last year" },
+    { value: "alltime", label: "All time" },
+  ];
+
+  const selectedLabel = value === "custom"
+    ? customFrom && customTo
+      ? `${new Date(customFrom).toLocaleDateString("en-LK", { day: "2-digit", month: "short" })} – ${new Date(customTo).toLocaleDateString("en-LK", { day: "2-digit", month: "short", year: "numeric" })}`
+      : "Custom range"
+    : PRESETS.find(p => p.value === value)?.label ?? "Select period";
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={cn(
+          "flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors",
+          open
+            ? "border-brand-400 bg-brand-50 text-brand-700"
+            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+        )}
+      >
+        <Calendar className="h-4 w-4 flex-shrink-0" />
+        <span>{selectedLabel}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {/* Panel */}
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+          {/* Preset grid */}
+          <div className="p-3">
+            <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">
+              Quick select
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {PRESETS.map(p => (
+                <button key={p.value}
+                  onClick={() => { onChange(p.value); setOpen(false); }}
+                  className={cn(
+                    "rounded-lg border py-2 text-xs font-medium transition-colors text-center",
+                    value === p.value && value !== "custom"
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200 hover:bg-white hover:text-gray-900"
+                  )}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-gray-100 mx-3" />
+
+          {/* Custom range */}
+          <div className="p-3">
+            <button
+              onClick={() => onChange("custom")}
+              className={cn(
+                "w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                value === "custom"
+                  ? "border-brand-400 bg-brand-50 text-brand-700"
+                  : "border-dashed border-gray-300 text-gray-500 hover:border-brand-300 hover:text-brand-600"
+              )}
+            >
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+              Custom date range
+            </button>
+
+            {value === "custom" && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <label className="text-[10px] font-medium text-brand-600 block mb-1">From</label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={e => onCustomFromChange(e.target.value)}
+                    className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400"
+                  />
+                </div>
+                <span className="text-gray-400 text-sm mt-4">→</span>
+                <div className="flex-1 min-w-0">
+                  <label className="text-[10px] font-medium text-brand-600 block mb-1">To</label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    max={new Date().toISOString().split("T")[0]}
+                    onChange={e => onCustomToChange(e.target.value)}
+                    className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400"
+                  />
+                </div>
+              </div>
+            )}
+
+            {value === "custom" && customFrom && customTo && (
+              <button
+                onClick={() => { onChange("month"); onCustomFromChange(""); onCustomToChange(""); }}
+                className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                Clear custom range
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────
 
 export default function DailySalesReport() {
@@ -230,95 +375,33 @@ export default function DailySalesReport() {
     <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h2 className="text-base font-medium text-gray-800">Sales — {label}</h2>
           {!loading && (
-            <p className="text-xs text-gray-400">{invoices.length} invoices</p>
+            <p className="text-xs text-gray-400 mt-0.5">{invoices.length} invoices</p>
           )}
         </div>
-        {canExport && !loading && invoices.length > 0 && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
-              <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
-            </Button>
-            <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
-              <Download className="h-4 w-4 text-red-500" /> PDF
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Period selector — pill strip */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {/* Quick period pills */}
-          {PERIOD_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setRange(opt.value)}
-              className={cn(
-                "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
-                range === opt.value
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-
-          {/* Custom range — dashed border to signal "user-defined" */}
-          <button
-            onClick={() => setRange("custom")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border-2 border-dashed px-3.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
-              range === "custom"
-                ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-gray-300 text-gray-500 hover:border-brand-400 hover:text-brand-600"
-            )}
-          >
-            <Calendar className="h-3.5 w-3.5" />
-            {range === "custom" && customFrom && customTo ? customLabel : "Custom range"}
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {canExport && !loading && invoices.length > 0 && (
+            <>
+              <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
+                <Download className="h-4 w-4 text-red-500" /> PDF
+              </Button>
+            </>
+          )}
+          <PeriodSelector
+            value={range}
+            onChange={setRange}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
         </div>
-
-        {/* Custom date pickers — inline card, only when custom is active */}
-        {range === "custom" && (
-          <div className="flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
-            <Calendar className="h-4 w-4 text-brand-500 flex-shrink-0" />
-            <div className="flex flex-1 items-center gap-2 min-w-0">
-              <div className="flex-1 min-w-0">
-                <label className="text-[10px] font-medium text-brand-600 block mb-0.5">From</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={e => setCustomFrom(e.target.value)}
-                  className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400"
-                />
-              </div>
-              <span className="text-brand-400 font-medium text-sm flex-shrink-0">→</span>
-              <div className="flex-1 min-w-0">
-                <label className="text-[10px] font-medium text-brand-600 block mb-0.5">To</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={e => setCustomTo(e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
-                  className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400"
-                />
-              </div>
-            </div>
-            {customFrom && customTo && (
-              <button
-                onClick={() => { setCustomFrom(""); setCustomTo(""); setRange("month"); }}
-                className="text-brand-400 hover:text-brand-700 flex-shrink-0 text-xs underline whitespace-nowrap"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Stat cards */}
