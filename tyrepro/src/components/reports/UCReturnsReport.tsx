@@ -46,7 +46,7 @@ export default function UCReturnsReport() {
   const [returns, setReturns] = useState<UCReturn[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | UCReturnStatus>("all");
-  const isAdmin = appUser?.role === "admin";
+  const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
   useEffect(() => {
     async function load() {
@@ -121,7 +121,7 @@ export default function UCReturnsReport() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h2 className="text-base font-medium text-gray-800">UC returns summary</h2>
-        {isAdmin && !loading && displayed.length > 0 && (
+        {canExport && !loading && displayed.length > 0 && (
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
               <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel

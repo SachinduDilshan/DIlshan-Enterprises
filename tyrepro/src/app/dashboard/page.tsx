@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   collection, query, where, getDocs,
@@ -59,27 +59,37 @@ function AlertBanner() {
 
         return (
           <div key={alert.type}
-            className={cn("rounded-lg border px-4 py-2.5 flex items-center gap-2", colorClass)}>
-            <span className="text-sm">{icon}</span>
-            <p className="text-sm font-medium flex-1">
-              {alert.count} × {alert.message}
-            </p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {link && (
-                <Link href={link} className="text-xs font-medium underline underline-offset-2">
-                  View
-                </Link>
-              )}
-              <button onClick={() => setExpanded(isExpanded ? null : alert.type)}>
-                {isExpanded
-                  ? <ChevronUp className="h-3.5 w-3.5 opacity-60" />
-                  : <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
-              </button>
+            className={cn("rounded-lg border px-4 py-2.5", colorClass)}>
+
+            {/* Main row */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm flex-shrink-0">{icon}</span>
+              <p className="text-sm font-medium flex-1 min-w-0 truncate">
+                {alert.count} × {alert.message}
+              </p>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+                {link && (
+                  <Link href={link}
+                    className="text-xs font-medium underline underline-offset-2 whitespace-nowrap">
+                    View
+                  </Link>
+                )}
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : alert.type)}
+                  className="flex-shrink-0"
+                >
+                  {isExpanded
+                    ? <ChevronUp className="h-3.5 w-3.5 opacity-60" />
+                    : <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
+                </button>
+              </div>
             </div>
+
+            {/* Expanded items */}
             {isExpanded && (
-              <ul className="w-full mt-1.5 ml-6 space-y-0.5 col-span-full">
+              <ul className="mt-2 ml-6 space-y-0.5">
                 {alert.items.map((item, i) => (
-                  <li key={i} className="text-xs opacity-80">• {item}</li>
+                  <li key={i} className="text-xs opacity-80 break-words">• {item}</li>
                 ))}
               </ul>
             )}
@@ -94,7 +104,7 @@ export default function DashboardPage() {
   const { appUser } = useAuth();
   const { stock } = useStock();
   const role = appUser?.role ?? "sales_rep";
-  const isDriver = role === "driver";
+  const isDriver = role === ("driver" as string);
   const quickLinks = ALL_QUICK_LINKS.filter(l => l.roles.includes(role));
 
   const [todaySales, setTodaySales] = useState(0);

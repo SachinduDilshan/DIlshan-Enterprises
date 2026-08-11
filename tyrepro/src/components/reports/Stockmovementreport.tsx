@@ -26,7 +26,7 @@ export default function StockMovementReport() {
   const [loading, setLoading] = useState(true);
   const [whFilter, setWhFilter] = useState("");
   const { stock, lowStockItems } = useStock();
-  const isAdmin = appUser?.role === "admin";
+  const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
   useEffect(() => {
     async function load() {
@@ -110,7 +110,7 @@ export default function StockMovementReport() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2">
         <h3 className="text-sm font-medium text-gray-600">Transfer history</h3>
-        {isAdmin && !loading && filteredTransfers.length > 0 && (
+        {canExport && !loading && filteredTransfers.length > 0 && (
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={handleTransferExcel} className="gap-1.5">
               <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
@@ -160,7 +160,7 @@ export default function StockMovementReport() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h2 className="text-base font-medium text-gray-800">Stock movement</h2>
         <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && !loading && (
+          {canExport && !loading && (
             <>
               <Button size="sm" variant="secondary" onClick={handleStockExcel} className="gap-1.5">
                 <FileSpreadsheet className="h-4 w-4 text-green-600" /> Stock Excel

@@ -21,22 +21,22 @@ import type { Invoice } from "@/types";
 // ── Period options ────────────────────────────────────────
 
 const PERIOD_OPTIONS = [
-  { value: "today",     label: "Today"       },
-  { value: "yesterday", label: "Yesterday"   },
-  { value: "week",      label: "Last 7 days" },
-  { value: "month",     label: "This month"  },
-  { value: "lastmonth", label: "Last month"  },
-  { value: "quarter",   label: "This quarter"},
-  { value: "year",      label: "This year"   },
-  { value: "lastyear",  label: "Last year"   },
-  { value: "alltime",   label: "All time"    },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "week", label: "Last 7 days" },
+  { value: "month", label: "This month" },
+  { value: "lastmonth", label: "Last month" },
+  { value: "quarter", label: "This quarter" },
+  { value: "year", label: "This year" },
+  { value: "lastyear", label: "Last year" },
+  { value: "alltime", label: "All time" },
 ];
 
 function getDateRange(range: string, customFrom?: string, customTo?: string): {
   start: Date; end: Date; label: string;
 } {
-  const now   = new Date();
-  const end   = new Date(now); end.setHours(23, 59, 59, 999);
+  const now = new Date();
+  const end = new Date(now); end.setHours(23, 59, 59, 999);
   const start = new Date(now); start.setHours(0, 0, 0, 0);
 
   switch (range) {
@@ -67,7 +67,7 @@ function getDateRange(range: string, customFrom?: string, customTo?: string): {
 
     case "quarter": {
       const qStart = Math.floor(now.getMonth() / 3) * 3;
-      const s      = new Date(now.getFullYear(), qStart, 1);
+      const s = new Date(now.getFullYear(), qStart, 1);
       return { start: s, end, label: "This quarter" };
     }
 
@@ -129,13 +129,13 @@ function StatCard({ icon: Icon, bg, fg, label, value, loading }: {
 // ── Main component ────────────────────────────────────────
 
 export default function DailySalesReport() {
-  const { appUser }                 = useAuth();
-  const [range, setRange]           = useState("month");
+  const { appUser } = useAuth();
+  const [range, setRange] = useState("month");
   const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo]     = useState("");
-  const [invoices, setInvoices]     = useState<Invoice[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const isAdmin                     = appUser?.role === "admin";
+  const [customTo, setCustomTo] = useState("");
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
   const { start, end, label } = getDateRange(range, customFrom, customTo);
   const showGrouped = ["year", "lastyear", "alltime", "quarter"].includes(range);
@@ -156,14 +156,14 @@ export default function DailySalesReport() {
           orderBy("invoiceDate", "desc")
         ));
         setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)));
-      } catch {}
+      } catch { }
       setLoading(false);
     }
     load();
   }, [range, customFrom, customTo]);
 
-  const totalSales  = invoices.reduce((s, i) => s + i.totalAmount, 0);
-  const cashSales   = invoices.filter(i => i.paymentType === "cash").reduce((s, i) => s + i.totalAmount, 0);
+  const totalSales = invoices.reduce((s, i) => s + i.totalAmount, 0);
+  const cashSales = invoices.filter(i => i.paymentType === "cash").reduce((s, i) => s + i.totalAmount, 0);
   const chequeSales = invoices.filter(i => i.paymentType !== "cash").reduce((s, i) => s + i.totalAmount, 0);
 
   // Group by date (short ranges)
@@ -187,12 +187,12 @@ export default function DailySalesReport() {
   function handleExcelExport() {
     exportToExcel(
       invoices.map(inv => ({
-        "Invoice No":  inv.invoiceNo,
-        "Shop":        inv.shopName,
-        "Date":        formatDate(inv.invoiceDate, "dd MMM yyyy"),
-        "Payment":     inv.paymentType === "cash" ? "Cash" : inv.paymentType.replace("cheque_", "Cheque ").replace("d", " days"),
+        "Invoice No": inv.invoiceNo,
+        "Shop": inv.shopName,
+        "Date": formatDate(inv.invoiceDate, "dd MMM yyyy"),
+        "Payment": inv.paymentType === "cash" ? "Cash" : inv.paymentType.replace("cheque_", "Cheque ").replace("d", " days"),
         "Amount (Rs)": inv.totalAmount,
-        "Warehouse":   inv.warehouseName,
+        "Warehouse": inv.warehouseName,
       })),
       `Sales-${label.replace(/[\s/–]/g, "-")}`,
       "Sales"
@@ -212,11 +212,11 @@ export default function DailySalesReport() {
         inv.warehouseName,
       ]),
       [
-        { label: "Total Sales",    value: formatLKR(totalSales)   },
-        { label: "Cash Sales",     value: formatLKR(cashSales)    },
-        { label: "Cheque Sales",   value: formatLKR(chequeSales)  },
+        { label: "Total Sales", value: formatLKR(totalSales) },
+        { label: "Cash Sales", value: formatLKR(cashSales) },
+        { label: "Cheque Sales", value: formatLKR(chequeSales) },
         { label: "Total Invoices", value: String(invoices.length) },
-        { label: "Period",         value: label                   },
+        { label: "Period", value: label },
       ]
     );
   }
@@ -237,7 +237,7 @@ export default function DailySalesReport() {
             <p className="text-xs text-gray-400">{invoices.length} invoices</p>
           )}
         </div>
-        {isAdmin && !loading && invoices.length > 0 && (
+        {canExport && !loading && invoices.length > 0 && (
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
               <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
@@ -323,10 +323,10 @@ export default function DailySalesReport() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 w-full">
-        <StatCard icon={TrendingUp} bg="bg-brand-50"  fg="text-brand-600"  label="Total sales"  value={formatLKR(totalSales)}   loading={loading} />
-        <StatCard icon={FileText}   bg="bg-gray-100"   fg="text-gray-600"   label="Invoices"     value={String(invoices.length)} loading={loading} />
-        <StatCard icon={Banknote}   bg="bg-green-50"   fg="text-green-600"  label="Cash sales"   value={formatLKR(cashSales)}    loading={loading} />
-        <StatCard icon={CreditCard} bg="bg-amber-50"   fg="text-amber-600"  label="Cheque sales" value={formatLKR(chequeSales)}  loading={loading} />
+        <StatCard icon={TrendingUp} bg="bg-brand-50" fg="text-brand-600" label="Total sales" value={formatLKR(totalSales)} loading={loading} />
+        <StatCard icon={FileText} bg="bg-gray-100" fg="text-gray-600" label="Invoices" value={String(invoices.length)} loading={loading} />
+        <StatCard icon={Banknote} bg="bg-green-50" fg="text-green-600" label="Cash sales" value={formatLKR(cashSales)} loading={loading} />
+        <StatCard icon={CreditCard} bg="bg-amber-50" fg="text-amber-600" label="Cheque sales" value={formatLKR(chequeSales)} loading={loading} />
       </div>
 
       {loading && (
