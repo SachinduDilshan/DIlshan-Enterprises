@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,33 +18,57 @@ const NAV_SECTIONS = [
   {
     label: "Main",
     items: [
-      { href: "/dashboard",          label: "Dashboard", icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
-      { href: "/dashboard/shops",    label: "Shops",     icon: Store,           roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/invoices", label: "Invoices",  icon: FileText,        roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/cheques",  label: "Cheques",   icon: CalendarClock,   roles: ["admin","sales_rep"]          },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "sales_rep", "driver"] },
+      { href: "/dashboard/shops", label: "Shops", icon: Store, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/invoices", label: "Invoices", icon: FileText, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/cheques", label: "Cheques", icon: CalendarClock, roles: ["admin", "sales_rep"] },
     ],
   },
   {
     label: "Operations",
     items: [
-      { href: "/dashboard/inventory",  label: "Inventory",  icon: Package,   roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin","sales_rep"]          },
-      { href: "/dashboard/dispatch",   label: "Dispatch",   icon: Truck,     roles: ["admin","sales_rep","driver"] },
+      { href: "/dashboard/inventory", label: "Inventory", icon: Package, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/dispatch", label: "Dispatch", icon: Truck, roles: ["admin", "sales_rep", "driver"] },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "/dashboard/reports",  label: "Reports",  icon: BarChart3, roles: ["admin","sales_rep"] },
-      { href: "/dashboard/settings", label: "Settings", icon: Settings,  roles: ["admin"]             },
+      { href: "/dashboard/reports", label: "Reports", icon: BarChart3, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: ["admin"] },
     ],
   },
 ];
 
 export function Sidebar() {
-  const pathname    = usePathname();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = currentTime.toLocaleTimeString("en-LK", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  const formattedDate = currentTime.toLocaleDateString("en-LK", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const pathname = usePathname();
   const { appUser } = useAuth();
-  const role        = appUser?.role ?? "sales_rep";
+  const role = appUser?.role ?? "sales_rep";
   const canSeeAlerts = role === "admin" || role === "sales_rep";
   const [showLogout, setShowLogout] = useState(false);
 
@@ -103,6 +127,23 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Live Clock */}
+      <div className="border-t border-white/10 px-4 py-3">
+        <div className="rounded-lg bg-white/5 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-white/30">
+            Local Time
+          </p>
+
+          <p className="mt-0.5 text-lg font-medium tracking-wide text-white">
+            {formattedTime}
+          </p>
+
+          <p className="text-[10px] text-white/40">
+            {formattedDate}
+          </p>
+        </div>
+      </div>
+
       {/* User */}
       <div className="border-t border-white/10 px-3 py-3">
         <div className="flex items-center gap-2.5 px-2">
@@ -111,7 +152,7 @@ export function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-medium text-white truncate">{appUser?.displayName}</p>
-            <p className="text-[10px] text-white/40 capitalize">{appUser?.role?.replace("_"," ")}</p>
+            <p className="text-[10px] text-white/40 capitalize">{appUser?.role?.replace("_", " ")}</p>
           </div>
           <button
             onClick={() => setShowLogout(true)}
