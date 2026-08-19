@@ -172,6 +172,7 @@ export function Sidebar() {
           icon={LogOut}
           iconBg="bg-red-50"
           iconColor="text-red-600"
+          confirmClassName="bg-red-800 hover:bg-red-900"
           onConfirm={handleSignOut}
           onCancel={() => setShowLogout(false)}
         />
