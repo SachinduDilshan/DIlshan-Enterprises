@@ -13,6 +13,7 @@ import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import { cn } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
 import type { UCReturn, UCReturnStatus } from "@/types";
+import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
 
 function daysSince(ts: Timestamp | undefined) {
   if (!ts) return null;
@@ -48,17 +49,31 @@ export default function UCReturnsReport() {
   const [filter, setFilter] = useState<"all" | UCReturnStatus>("all");
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
+  const [range, setRange] = useState("alltime");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const { start, end, label: rangeLabel } = getDateRange(range, customFrom, customTo);
+
   useEffect(() => {
+    if (range === "custom" && (!customFrom || !customTo)) { setLoading(false); return; }
+    setLoading(true);
     async function load() {
-      setLoading(true);
       try {
         const snap = await getDocs(query(collection(db, "ucReturns"), orderBy("createdAt", "desc")));
-        setReturns(snap.docs.map(d => ({ id: d.id, ...d.data() } as UCReturn)));
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as UCReturn));
+        const inRange = range === "alltime"
+          ? all
+          : all.filter(r => {
+            const d = r.tyreReceivedAt?.toDate?.() ?? r.createdAt?.toDate?.();
+            return d && d >= start && d <= end;
+          });
+        setReturns(inRange);
       } catch { }
       setLoading(false);
     }
     load();
-  }, []);
+  }, [range, customFrom, customTo]);
 
   const active = returns.filter(r => r.status !== "closed");
   const closed = returns.filter(r => r.status === "closed");
@@ -120,17 +135,24 @@ export default function UCReturnsReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-base font-medium text-gray-800">UC returns summary</h2>
-        {canExport && !loading && displayed.length > 0 && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
-              <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
-            </Button>
-            <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
-              <Download className="h-4 w-4 text-red-500" /> PDF
-            </Button>
-          </div>
-        )}
+        <h2 className="text-base font-medium text-gray-800">UC returns — {rangeLabel}</h2>
+        <div className="flex flex-wrap gap-2 items-center">
+          {canExport && !loading && displayed.length > 0 && (
+            <>
+              <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
+                <Download className="h-4 w-4 text-red-500" /> PDF
+              </Button>
+            </>
+          )}
+          <PeriodSelector
+            value={range} onChange={setRange}
+            customFrom={customFrom} customTo={customTo}
+            onCustomFromChange={setCustomFrom} onCustomToChange={setCustomTo}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

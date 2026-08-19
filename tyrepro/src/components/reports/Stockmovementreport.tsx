@@ -13,6 +13,7 @@ import { formatDate } from "@/lib/utils";
 import { ArrowLeftRight, AlertTriangle, FileSpreadsheet, Download } from "lucide-react";
 import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import type { StockTransfer } from "@/types";
+import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
 
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
@@ -28,17 +29,29 @@ export default function StockMovementReport() {
   const { stock, lowStockItems } = useStock();
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
+  const [range, setRange] = useState("month");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const { start, end, label: rangeLabel } = getDateRange(range, customFrom, customTo);
+
   useEffect(() => {
+    if (range === "custom" && (!customFrom || !customTo)) { setLoading(false); return; }
+    setLoading(true);
     async function load() {
-      setLoading(true);
       try {
         const snap = await getDocs(query(collection(db, "stockTransfers"), orderBy("transferDate", "desc")));
-        setTransfers(snap.docs.map(d => ({ id: d.id, ...d.data() } as StockTransfer)));
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as StockTransfer));
+        const inRange = all.filter(t => {
+          const d = t.transferDate.toDate();
+          return d >= start && d <= end;
+        });
+        setTransfers(inRange);
       } catch { }
       setLoading(false);
     }
     load();
-  }, []);
+  }, [range, customFrom, customTo]);
 
   const filteredStock = whFilter ? stock.filter(s => s.warehouseId === whFilter) : stock;
   const filteredTransfers = whFilter ? transfers.filter(t => t.fromWarehouseId === whFilter || t.toWarehouseId === whFilter) : transfers;
@@ -158,8 +171,8 @@ export default function StockMovementReport() {
       </Card>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-base font-medium text-gray-800">Stock movement</h2>
-        <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-base font-medium text-gray-800">Stock movement — {rangeLabel}</h2>
+        <div className="flex flex-wrap items-center gap-2">
           {canExport && !loading && (
             <>
               <Button size="sm" variant="secondary" onClick={handleStockExcel} className="gap-1.5">
@@ -170,7 +183,11 @@ export default function StockMovementReport() {
               </Button>
             </>
           )}
-          <Select value={whFilter} onChange={e => setWhFilter(e.target.value)} options={WAREHOUSES} className="w-full sm:w-40" />
+          <PeriodSelector
+            value={range} onChange={setRange}
+            customFrom={customFrom} customTo={customTo}
+            onCustomFromChange={setCustomFrom} onCustomToChange={setCustomTo}
+          />
         </div>
       </div>
 

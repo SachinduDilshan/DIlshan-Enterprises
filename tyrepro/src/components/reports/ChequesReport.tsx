@@ -12,6 +12,7 @@ import { CalendarClock, CheckCircle, AlertTriangle, XCircle, FileSpreadsheet, Do
 import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import { Timestamp } from "firebase/firestore";
 import type { Cheque } from "@/types";
+import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
 
 function daysDiff(ts: Timestamp) {
   return Math.ceil((ts.toDate().getTime() - Date.now()) / 86_400_000);
@@ -24,17 +25,30 @@ export default function ChequesReport() {
   const [filter, setFilter] = useState<"all" | "pending" | "deposited" | "bounced">("all");
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
+  const [range, setRange] = useState("alltime");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const { start, end, label: rangeLabel } = getDateRange(range, customFrom, customTo);
+
   useEffect(() => {
+    if (range === "custom" && (!customFrom || !customTo)) { setLoading(false); return; }
+    setLoading(true);
     async function load() {
-      setLoading(true);
       try {
         const snap = await getDocs(query(collection(db, "cheques"), orderBy("dueDate", "asc")));
-        setCheques(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque)));
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque));
+        // Filter by due date within range
+        const filtered = all.filter(c => {
+          const d = c.dueDate.toDate();
+          return d >= start && d <= end;
+        });
+        setCheques(filtered);
       } catch { }
       setLoading(false);
     }
     load();
-  }, []);
+  }, [range, customFrom, customTo]);
 
   const filtered = filter === "all" ? cheques : cheques.filter(c => c.status === filter);
   const pending = cheques.filter(c => c.status === "pending");
@@ -85,17 +99,24 @@ export default function ChequesReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-base font-medium text-gray-800">Cheque collection report</h2>
-        {canExport && !loading && filtered.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
-              <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
-            </Button>
-            <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
-              <Download className="h-4 w-4 text-red-500" /> PDF
-            </Button>
-          </div>
-        )}
+        <h2 className="text-base font-medium text-gray-800">Cheques — {rangeLabel}</h2>
+        <div className="flex flex-wrap gap-2 items-center">
+          {canExport && !loading && filtered.length > 0 && (
+            <>
+              <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handlePDFExport} className="gap-1.5">
+                <Download className="h-4 w-4 text-red-500" /> PDF
+              </Button>
+            </>
+          )}
+          <PeriodSelector
+            value={range} onChange={setRange}
+            customFrom={customFrom} customTo={customTo}
+            onCustomFromChange={setCustomFrom} onCustomToChange={setCustomTo}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 w-full">

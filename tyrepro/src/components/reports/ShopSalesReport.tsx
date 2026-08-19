@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { TrendingUp, AlertCircle, FileSpreadsheet, Download } from "lucide-react";
+import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
 import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import type { Invoice } from "@/types";
 
@@ -23,32 +24,34 @@ interface ShopStat {
 export default function ShopSalesReport() {
   const { shops } = useShops(false);
   const { appUser } = useAuth();
+
   const [range, setRange] = useState("month");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const { start, end, label: rangeLabel } = getDateRange(range, customFrom, customTo);
+
   const [stats, setStats] = useState<ShopStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
   useEffect(() => {
+    if (range === "custom" && (!customFrom || !customTo)) { setLoading(false); return; }
+    setLoading(true);
     async function load() {
-      setLoading(true);
-      const now = new Date(); let start = new Date(now);
-      if (range === "week") start.setDate(now.getDate() - 6);
-      if (range === "month") start.setDate(1);
-      if (range === "all") start = new Date(2020, 0, 1);
-      start.setHours(0, 0, 0, 0);
       try {
         const snap = await getDocs(query(
           collection(db, "invoices"),
           where("status", "==", "confirmed"),
           where("invoiceDate", ">=", Timestamp.fromDate(start)),
+          where("invoiceDate", "<=", Timestamp.fromDate(end)),
           orderBy("invoiceDate", "desc")
         ));
         const invs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
         const map: Record<string, ShopStat> = {};
         invs.forEach(inv => {
+          const shop = shops.find(s => s.id === inv.shopId);
           if (!map[inv.shopId]) {
-            const shop = shops.find(s => s.id === inv.shopId);
             map[inv.shopId] = { shopId: inv.shopId, shopName: inv.shopName, total: 0, invoices: 0, cash: 0, cheque: 0, outstanding: shop?.outstandingBalance ?? 0 };
           }
           map[inv.shopId].total += inv.totalAmount;
@@ -60,10 +63,9 @@ export default function ShopSalesReport() {
       } catch { }
       setLoading(false);
     }
-    if (shops.length > 0 || range) load();
-  }, [range, shops.length]);
+    load();
+  }, [range, customFrom, customTo, shops.length]);
 
-  const rangeLabel = range === "week" ? "Last 7 days" : range === "month" ? "This month" : "All time";
   const filtered = stats.filter(s => s.shopName.toLowerCase().includes(search.toLowerCase()));
   const grandTotal = filtered.reduce((s, st) => s + st.total, 0);
 
@@ -104,9 +106,12 @@ export default function ShopSalesReport() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-base font-medium text-gray-800">Shop-wise sales</h2>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h2 className="text-base font-medium text-gray-800">Shop-wise sales — {rangeLabel}</h2>
+          {!loading && <p className="text-xs text-gray-400 mt-0.5">{filtered.length} shops</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {canExport && !loading && filtered.length > 0 && (
             <>
               <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
@@ -117,12 +122,10 @@ export default function ShopSalesReport() {
               </Button>
             </>
           )}
-          <Dropdown value={range} onChange={setRange} className="w-full sm:w-40"
-            options={[
-              { value: "week", label: "Last 7 days" },
-              { value: "month", label: "This month" },
-              { value: "all", label: "All time" },
-            ]}
+          <PeriodSelector
+            value={range} onChange={setRange}
+            customFrom={customFrom} customTo={customTo}
+            onCustomFromChange={setCustomFrom} onCustomToChange={setCustomTo}
           />
         </div>
       </div>
