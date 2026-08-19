@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const t = setTimeout(() => {
       if (!firebaseUser) { router.replace("/login"); return; }
       if (appUser && !appUser.active) { router.replace("/login"); return; }
-      if (appUser?.role === "driver") {
+      if (appUser && (appUser.role as string) === "driver") {
         const allowed = DRIVER_ALLOWED.some(p => pathname === p || pathname.startsWith(p + "/"));
         if (!allowed) router.replace("/dashboard/dispatch");
       }

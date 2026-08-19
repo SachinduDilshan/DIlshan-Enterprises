@@ -22,7 +22,6 @@ export function MobileNav() {
   useEffect(() => {
     setMounted(true);
 
-    // Check if mobile and update on resize
     function checkMobile() {
       setIsMobile(window.innerWidth < 768);
     }
@@ -61,7 +60,6 @@ export function MobileNav() {
       : pathname === href || pathname.startsWith(href + "/");
   }
 
-  // Don't render on server, or on desktop
   if (!mounted || !isMobile) return null;
 
   return createPortal(

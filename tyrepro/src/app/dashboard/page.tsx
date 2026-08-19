@@ -8,12 +8,27 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
-import { useNotifications, ALERT_ICONS, ALERT_COLORS } from "@/hooks/useNotifications";
+import { useNotifications } from "@/hooks/useNotifications";
 import { useStock } from "@/hooks/useStock";
 import { formatLKR, formatDate } from "@/lib/utils";
 import {
-  TrendingUp, CalendarClock, Package, RotateCcw,
-  Plus, ChevronRight, ChevronDown, ChevronUp, BarChart3, Truck,
+  TrendingUp,
+  CalendarClock,
+  Package,
+  RotateCcw,
+  Plus,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Truck,
+  Bell,
+  RefreshCw,
+  AlertTriangle,
+  PackageX,
+  Send,
+  Clock3,
+  CircleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/types";
@@ -38,64 +53,330 @@ const ALL_QUICK_LINKS = [
 
 function AlertBanner() {
   const { notifications, loading, refreshAlerts } = useNotifications();
+
   const [expanded, setExpanded] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   async function handleRefresh() {
     setRefreshing(true);
-    await refreshAlerts();
-    setRefreshing(false);
+
+    try {
+      await refreshAlerts();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
-  if (loading || notifications.length === 0) return null;
+  if (loading || notifications.length === 0) {
+    return null;
+  }
+
+  const getAlertStyle = (type: string) => {
+    switch (type) {
+      case "low_stock":
+        return {
+          icon: Package,
+          iconBg: "bg-amber-50",
+          iconColor: "text-amber-600",
+          badgeBg: "bg-amber-50",
+          badgeColor: "text-amber-700",
+          label: "Inventory",
+        };
+
+      case "out_of_stock":
+        return {
+          icon: PackageX,
+          iconBg: "bg-red-50",
+          iconColor: "text-red-600",
+          badgeBg: "bg-red-50",
+          badgeColor: "text-red-700",
+          label: "Stock",
+        };
+
+      case "uc_not_sent":
+        return {
+          icon: Send,
+          iconBg: "bg-blue-50",
+          iconColor: "text-blue-600",
+          badgeBg: "bg-blue-50",
+          badgeColor: "text-blue-700",
+          label: "CEAT UC",
+        };
+
+      case "ceat_overdue":
+        return {
+          icon: Clock3,
+          iconBg: "bg-red-50",
+          iconColor: "text-red-600",
+          badgeBg: "bg-red-50",
+          badgeColor: "text-red-700",
+          label: "CEAT UC",
+        };
+
+      case "cheque_due_soon":
+        return {
+          icon: CalendarClock,
+          iconBg: "bg-amber-50",
+          iconColor: "text-amber-600",
+          badgeBg: "bg-amber-50",
+          badgeColor: "text-amber-700",
+          label: "Cheques",
+        };
+
+      case "cheque_overdue":
+        return {
+          icon: CircleAlert,
+          iconBg: "bg-red-50",
+          iconColor: "text-red-600",
+          badgeBg: "bg-red-50",
+          badgeColor: "text-red-700",
+          label: "Cheques",
+        };
+
+      default:
+        return {
+          icon: AlertTriangle,
+          iconBg: "bg-gray-100",
+          iconColor: "text-gray-600",
+          badgeBg: "bg-gray-100",
+          badgeColor: "text-gray-700",
+          label: "Attention",
+        };
+    }
+  };
 
   return (
-    <div className="mb-5 space-y-2">
-      {notifications.map(alert => {
-        const colorClass = ALERT_COLORS[alert.type] ?? "text-gray-700 bg-gray-50 border-gray-200";
-        const icon = ALERT_ICONS[alert.type] ?? "🔔";
-        const link = ALERT_LINKS[alert.type];
-        const isExpanded = expanded === alert.type;
+    <div className="mb-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
-        return (
-          <div key={alert.type}
-            className={cn("rounded-lg border px-4 py-2.5", colorClass)}>
+      {/* Header */}
 
-            {/* Main row */}
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm flex-shrink-0">{icon}</span>
-              <p className="text-sm font-medium flex-1 min-w-0 truncate">
-                {alert.count} × {alert.message}
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+
+        <div className="flex items-center gap-3">
+
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#383364]/10">
+            <Bell className="h-4 w-4 text-[#383364]" />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+
+              <p className="text-sm font-semibold text-gray-900">
+                Needs attention
               </p>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+
+              <span className="rounded-full bg-[#383364]/10 px-2 py-0.5 text-[11px] font-semibold text-[#383364]">
+                {notifications.length}
+              </span>
+
+            </div>
+
+            <p className="mt-0.5 text-xs text-gray-400">
+              Items that may require your attention
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {/* Refresh */}
+
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Refresh notifications"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+        >
+          <RefreshCw
+            className={cn(
+              "h-4 w-4",
+              refreshing && "animate-spin"
+            )}
+          />
+        </button>
+
+      </div>
+
+
+      {/* Notification list */}
+
+      <div>
+
+        {notifications.map((alert, index) => {
+
+          const style = getAlertStyle(alert.type);
+
+          const Icon = style.icon;
+
+          const link = ALERT_LINKS[alert.type];
+
+          const isExpanded = expanded === alert.type;
+
+          return (
+            <div
+              key={alert.type}
+              className={cn(
+                "transition-colors hover:bg-gray-50/70",
+                index < notifications.length - 1 &&
+                "border-b border-gray-100"
+              )}
+            >
+
+              {/* Main notification row */}
+
+              <div className="flex items-center gap-3 px-4 py-3.5">
+
+                {/* Icon */}
+
+                <div
+                  className={cn(
+                    "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg",
+                    style.iconBg
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4",
+                      style.iconColor
+                    )}
+                  />
+                </div>
+
+
+                {/* Content */}
+
+                <div className="min-w-0 flex-1">
+
+                  <div className="flex items-center gap-2">
+
+                    <p className="truncate text-sm font-medium text-gray-900">
+                      {alert.message}
+                    </p>
+
+                    <span
+                      className={cn(
+                        "hidden rounded-full px-2 py-0.5 text-[10px] font-medium sm:inline-flex",
+                        style.badgeBg,
+                        style.badgeColor
+                      )}
+                    >
+                      {style.label}
+                    </span>
+
+                  </div>
+
+                  <p className="mt-0.5 text-xs text-gray-400">
+                    {alert.count} item{alert.count !== 1 ? "s" : ""} require
+                    {alert.count === 1 ? "s" : ""} attention
+                  </p>
+
+                </div>
+
+
+                {/* Count */}
+
+                <div className="hidden flex-shrink-0 sm:block">
+
+                  <span
+                    className={cn(
+                      "flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold",
+                      style.badgeBg,
+                      style.badgeColor
+                    )}
+                  >
+                    {alert.count}
+                  </span>
+
+                </div>
+
+
+                {/* View */}
+
                 {link && (
-                  <Link href={link}
-                    className="text-xs font-medium underline underline-offset-2 whitespace-nowrap">
+                  <Link
+                    href={link}
+                    className="hidden flex-shrink-0 text-xs font-medium text-[#383364] hover:underline sm:block"
+                  >
                     View
                   </Link>
                 )}
-                <button
-                  onClick={() => setExpanded(isExpanded ? null : alert.type)}
-                  className="flex-shrink-0"
-                >
-                  {isExpanded
-                    ? <ChevronUp className="h-3.5 w-3.5 opacity-60" />
-                    : <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
-                </button>
-              </div>
-            </div>
 
-            {/* Expanded items */}
-            {isExpanded && (
-              <ul className="mt-2 ml-6 space-y-0.5">
-                {alert.items.map((item, i) => (
-                  <li key={i} className="text-xs opacity-80 break-words">• {item}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
+
+                {/* Expand */}
+
+                {alert.items?.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpanded(
+                        isExpanded ? null : alert.type
+                      )
+                    }
+                    aria-label={
+                      isExpanded
+                        ? "Collapse notification"
+                        : "Expand notification"
+                    }
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+
+              </div>
+
+
+              {/* Expanded details */}
+
+              {isExpanded && alert.items?.length > 0 && (
+
+                <div className="px-4 pb-4 pl-16">
+
+                  <div className="rounded-lg bg-gray-50 px-4 py-3">
+
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      Details
+                    </p>
+
+                    <ul className="space-y-1.5">
+
+                      {alert.items.map((item, i) => (
+
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 text-xs text-gray-600"
+                        >
+
+                          <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+
+                          <span>
+                            {item}
+                          </span>
+
+                        </li>
+
+                      ))}
+
+                    </ul>
+
+                  </div>
+
+                </div>
+
+              )}
+
+            </div>
+          );
+        })}
+
+      </div>
+
     </div>
   );
 }
