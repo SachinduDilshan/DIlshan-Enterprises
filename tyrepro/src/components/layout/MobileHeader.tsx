@@ -150,7 +150,7 @@ export function MobileHeader() {
           <button
             type="button"
             onClick={handleProfileClick}
-            aria-label="Open account menu"
+            aria-label="Sign Out"
             aria-expanded={showProfile}
             className={`
               flex h-9 w-9 items-center justify-center
@@ -232,31 +232,6 @@ export function MobileHeader() {
               {/* Profile option */}
 
               <div className="p-1.5">
-
-                <button
-                  type="button"
-                  onClick={() => setShowProfile(false)}
-                  className="
-                    flex w-full items-center gap-3
-                    rounded-xl
-                    px-3 py-2.5
-                    text-left
-                    text-sm
-                    text-gray-700
-                    transition-colors
-                    hover:bg-gray-50
-                  "
-                >
-
-                  <UserRound className="h-4 w-4 text-gray-400" />
-
-                  <span className="flex-1">
-                    Account
-                  </span>
-
-                </button>
-
-
                 {/* Sign out */}
 
                 <button

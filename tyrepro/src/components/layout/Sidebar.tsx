@@ -166,7 +166,7 @@ export function Sidebar() {
 
       {showLogout && (
         <ConfirmDialog
-          title="Sign out?"
+          title="Sign Out?"
           description={`You are signed in as ${appUser?.displayName}. You will need to log in again to access TyrePro.`}
           confirmLabel="Sign out"
           icon={LogOut}
