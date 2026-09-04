@@ -484,7 +484,7 @@ export default function DashboardPage() {
         </div>
         {!isDriver && (
           <Link href="/dashboard/invoices/new">
-            <button className="flex items-center gap-1.5 bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-brand-800 transition-colors">
+            <button className="flex items-center gap-1.5 bg-brand-800 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-brand-800 transition-colors">
               <Plus className="h-4 w-4" /> New invoice
             </button>
           </Link>
@@ -521,7 +521,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
               <p className="text-sm font-medium text-gray-900">Recent invoices</p>
               <Link href="/dashboard/invoices"
-                className="text-xs text-brand-600 hover:underline flex items-center gap-0.5">
+                className="text-xs text-brand-700 hover:underline flex items-center gap-0.5">
                 View all <ChevronRight className="h-3 w-3" />
               </Link>
             </div>

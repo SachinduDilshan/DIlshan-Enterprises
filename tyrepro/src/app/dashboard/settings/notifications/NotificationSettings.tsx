@@ -83,7 +83,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-        checked ? "bg-brand-600" : "bg-gray-200"
+        checked ? "bg-brand-700" : "bg-gray-200"
       )}
     >
       <span className={cn(
@@ -223,7 +223,7 @@ export default function NotificationSettings() {
       <Card>
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 flex-shrink-0">
-            <Mail className="h-4 w-4 text-brand-600" />
+            <Mail className="h-4 w-4 text-brand-700" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900">Email delivery</p>

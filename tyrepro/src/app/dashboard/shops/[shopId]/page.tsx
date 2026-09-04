@@ -195,7 +195,7 @@ export default function ShopDetailPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${tab === t ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-700"
+            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${tab === t ? "bg-brand-700 text-white" : "text-gray-500 hover:text-gray-700"
               }`}
           >
             {t === "invoices" ? `Invoices (${invoices.length})` : `Cheques (${cheques.length})`}

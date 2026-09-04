@@ -153,7 +153,7 @@ export default function ChequesReport() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {(["all", "pending", "deposited", "bounced"] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f ? "bg-brand-700 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
             {f.charAt(0).toUpperCase() + f.slice(1)} ({f === "all" ? cheques.length : f === "pending" ? pending.length : f === "deposited" ? deposited.length : bounced.length})
           </button>
         ))}

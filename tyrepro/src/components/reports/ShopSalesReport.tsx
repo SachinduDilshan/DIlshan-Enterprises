@@ -6,7 +6,6 @@ import { db } from "@/lib/firebase";
 import { useShops } from "@/hooks/useShops";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/Card";
-import { Dropdown } from "@/components/ui/Dropdown";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { formatLKR, formatDate } from "@/lib/utils";
@@ -132,7 +131,7 @@ export default function ShopSalesReport() {
 
       <Input placeholder="Search shop..." value={search} onChange={e => setSearch(e.target.value)} />
 
-      <Card className="flex items-center justify-between bg-brand-600 border-0 text-white gap-2 min-w-0">
+      <Card className="flex items-center justify-between bg-brand-700 border-0 text-white gap-2 min-w-0">
         <div className="min-w-0">
           <p className="text-xs text-brand-200 truncate">Total sales — {filtered.length} shops</p>
           <p className="text-xl md:text-2xl font-semibold truncate">{formatLKR(grandTotal)}</p>

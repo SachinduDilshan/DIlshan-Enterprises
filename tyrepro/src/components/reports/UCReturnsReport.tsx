@@ -184,7 +184,7 @@ export default function UCReturnsReport() {
           { value: "closed", label: `Closed (${closed.length})` },
         ] as const).map(f => (
           <button key={f.value} onClick={() => setFilter(f.value as any)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${filter === f.value ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${filter === f.value ? "bg-brand-700 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
             {f.label}
           </button>
         ))}

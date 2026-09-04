@@ -85,8 +85,8 @@ function StockBar({
       : qty <= reorderLevel
       ? "bg-red-500"
       : qty <= reorderLevel * 2
-      ? "bg-amber-400"
-      : "bg-green-500";
+      ? "bg-amber-500"
+      : "bg-green-700";
 
   return (
     <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100">
@@ -211,8 +211,8 @@ function AdjustStockModal({
             className={cn(
               "min-h-12 flex-1 border-0 text-white",
               mode === "add"
-                ? "bg-green-600 hover:bg-green-700"
-                : "bg-red-600 hover:bg-red-700"
+                ? "bg-green-800 hover:bg-green-900"
+                : "bg-red-800 hover:bg-red-900"
             )}
             type="submit"
             form="adjust-stock-form"
@@ -1769,7 +1769,7 @@ export default function InventoryPage() {
                   className={cn(
                     "px-3 py-2 font-medium transition-colors",
                     tyreTab === t
-                      ? "bg-brand-600 text-white"
+                      ? "bg-brand-700 text-white"
                       : "text-gray-500 hover:text-gray-700"
                   )}
                 >

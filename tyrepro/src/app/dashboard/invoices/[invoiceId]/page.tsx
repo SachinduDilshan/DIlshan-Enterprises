@@ -104,7 +104,7 @@ export default function InvoiceDetailPage() {
   }, [invoiceId]);
 
   if (loading) {
-    return <div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>;
+    return <div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-800 border-t-transparent" /></div>;
   }
 
   if (!invoice) {
@@ -130,12 +130,12 @@ export default function InvoiceDetailPage() {
       </div>
 
       {/* Company header */}
-      <Card className="mb-4 bg-brand-600 text-white border-0">
+      <Card className="mb-4 bg-brand-800 text-white border-0">
         <p className="text-base font-semibold">Dilshan Enterprises</p>
-        <p className="text-xs text-brand-100">Tire Distributors — Anuradhapura District</p>
+        <p className="text-xs text-brand-200">Tire Distributors — Anuradhapura District</p>
         <div className="mt-3 pt-3 border-t border-brand-500 flex justify-between">
           <div>
-            <p className="text-xs text-brand-200">Invoice no.</p>
+            <p className="text-xs text-brand-300">Invoice no.</p>
             <p className="text-sm font-medium">{invoice.invoiceNo}</p>
           </div>
           <div className="text-right">
@@ -149,7 +149,7 @@ export default function InvoiceDetailPage() {
       <Card className="mb-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50">
-            <Store className="h-4 w-4 text-brand-600" />
+            <Store className="h-4 w-4 text-brand-700" />
           </div>
           <div>
             <p className="text-sm font-medium text-gray-900">{invoice.shopName}</p>
