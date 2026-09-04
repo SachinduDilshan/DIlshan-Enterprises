@@ -24,51 +24,43 @@ export function getDateRange(range: string, customFrom?: string, customTo?: stri
   const start = new Date(now); start.setHours(0, 0, 0, 0);
 
   switch (range) {
-    case "today":
-      return { start, end, label: "Today" };
+    case "today":     return { start, end, label: "Today" };
     case "yesterday": {
-      const s = new Date(now); s.setDate(now.getDate() - 1); s.setHours(0,0,0,0);
-      const e = new Date(now); e.setDate(now.getDate() - 1); e.setHours(23,59,59,999);
-      return { start: s, end: e, label: "Yesterday" };
+      const s = new Date(now); s.setDate(now.getDate()-1); s.setHours(0,0,0,0);
+      const e = new Date(now); e.setDate(now.getDate()-1); e.setHours(23,59,59,999);
+      return { start:s, end:e, label:"Yesterday" };
     }
     case "week": {
-      const s = new Date(now); s.setDate(now.getDate() - 6); s.setHours(0,0,0,0);
-      return { start: s, end, label: "Last 7 days" };
+      const s = new Date(now); s.setDate(now.getDate()-6); s.setHours(0,0,0,0);
+      return { start:s, end, label:"Last 7 days" };
     }
-    case "month": {
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end, label: "This month" };
-    }
+    case "month":     return { start:new Date(now.getFullYear(),now.getMonth(),1), end, label:"This month" };
     case "lastmonth": {
-      const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const e = new Date(now.getFullYear(), now.getMonth(), 0); e.setHours(23,59,59,999);
-      return { start: s, end: e, label: "Last month" };
+      const s = new Date(now.getFullYear(),now.getMonth()-1,1);
+      const e = new Date(now.getFullYear(),now.getMonth(),0); e.setHours(23,59,59,999);
+      return { start:s, end:e, label:"Last month" };
     }
     case "quarter": {
-      const q = Math.floor(now.getMonth() / 3) * 3;
-      return { start: new Date(now.getFullYear(), q, 1), end, label: "This quarter" };
+      const q = Math.floor(now.getMonth()/3)*3;
+      return { start:new Date(now.getFullYear(),q,1), end, label:"This quarter" };
     }
-    case "year": {
-      return { start: new Date(now.getFullYear(), 0, 1), end, label: `This year (${now.getFullYear()})` };
-    }
+    case "year":      return { start:new Date(now.getFullYear(),0,1), end, label:`This year (${now.getFullYear()})` };
     case "lastyear": {
-      const y = now.getFullYear() - 1;
-      const e = new Date(y, 11, 31); e.setHours(23,59,59,999);
-      return { start: new Date(y, 0, 1), end: e, label: `Last year (${y})` };
+      const y = now.getFullYear()-1;
+      const e = new Date(y,11,31); e.setHours(23,59,59,999);
+      return { start:new Date(y,0,1), end:e, label:`Last year (${y})` };
     }
-    case "alltime": {
-      return { start: new Date(2020, 0, 1), end, label: "All time" };
-    }
+    case "alltime":   return { start:new Date(2020,0,1), end, label:"All time" };
     case "custom": {
-      const s = customFrom ? new Date(customFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
+      const s = customFrom ? new Date(customFrom) : new Date(now.getFullYear(),now.getMonth(),1);
       const e = customTo   ? new Date(customTo)   : new Date(now);
       s.setHours(0,0,0,0); e.setHours(23,59,59,999);
       return {
-        start: s, end: e,
-        label: `${s.toLocaleDateString("en-LK",{day:"2-digit",month:"short"})} – ${e.toLocaleDateString("en-LK",{day:"2-digit",month:"short",year:"numeric"})}`,
+        start:s, end:e,
+        label:`${s.toLocaleDateString("en-LK",{day:"2-digit",month:"short"})} – ${e.toLocaleDateString("en-LK",{day:"2-digit",month:"short",year:"numeric"})}`,
       };
     }
-    default:
-      return { start, end, label: "This month" };
+    default: return { start, end, label:"This month" };
   }
 }
 
@@ -84,8 +76,16 @@ interface PeriodSelectorProps {
 export function PeriodSelector({
   value, onChange, customFrom, customTo, onCustomFromChange, onCustomToChange,
 }: PeriodSelectorProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen]         = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const ref                     = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 640);
+    function onResize() { setIsMobile(window.innerWidth < 640); }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -102,89 +102,138 @@ export function PeriodSelector({
     : PRESETS.find(p => p.value === value)?.label ?? "Select period";
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        className={cn(
-          "flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors",
-          open
-            ? "border-brand-400 bg-brand-50 text-brand-700"
-            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-        )}
-      >
-        <Calendar className="h-4 w-4 flex-shrink-0" />
-        <span>{selectedLabel}</span>
-        <ChevronDown className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform", open && "rotate-180")} />
-      </button>
+    <>
+      <div className="relative" ref={ref}>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+            open
+              ? "border-brand-400 bg-brand-50 text-brand-700"
+              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+          )}
+        >
+          <Calendar className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate max-w-[120px] sm:max-w-none">{selectedLabel}</span>
+          <ChevronDown className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform", open && "rotate-180")} />
+        </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
-          <div className="p-3">
-            <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">
-              Quick select
-            </p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {PRESETS.map(p => (
-                <button key={p.value}
-                  onClick={() => { onChange(p.value); if (p.value !== "custom") setOpen(false); }}
-                  className={cn(
-                    "rounded-lg border py-2 text-xs font-medium transition-colors text-center",
-                    value === p.value && value !== "custom"
-                      ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200 hover:bg-white hover:text-gray-900"
-                  )}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+        {/* Desktop dropdown */}
+        {open && !isMobile && (
+          <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+            <PeriodPanel
+              value={value} onChange={v => { onChange(v); if (v !== "custom") setOpen(false); }}
+              customFrom={customFrom} customTo={customTo}
+              onCustomFromChange={onCustomFromChange}
+              onCustomToChange={onCustomToChange}
+              onClear={() => { onChange("month"); onCustomFromChange(""); onCustomToChange(""); setOpen(false); }}
+            />
           </div>
+        )}
+      </div>
 
-          <div className="h-px bg-gray-100 mx-3" />
-
-          <div className="p-3">
-            <button
-              onClick={() => onChange("custom")}
-              className={cn(
-                "w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-                value === "custom"
-                  ? "border-brand-400 bg-brand-50 text-brand-700"
-                  : "border-dashed border-gray-300 text-gray-500 hover:border-brand-300 hover:text-brand-600"
-              )}
-            >
-              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-              Custom date range
-            </button>
-
-            {value === "custom" && (
-              <div className="mt-2 flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <label className="text-[10px] font-medium text-brand-600 block mb-1">From</label>
-                  <input type="date" value={customFrom}
-                    onChange={e => onCustomFromChange(e.target.value)}
-                    className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400" />
-                </div>
-                <span className="text-gray-400 text-sm mt-4">→</span>
-                <div className="flex-1 min-w-0">
-                  <label className="text-[10px] font-medium text-brand-600 block mb-1">To</label>
-                  <input type="date" value={customTo}
-                    max={new Date().toISOString().split("T")[0]}
-                    onChange={e => onCustomToChange(e.target.value)}
-                    className="w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-brand-400" />
-                </div>
-              </div>
-            )}
-
-            {value === "custom" && customFrom && customTo && (
-              <button
-                onClick={() => { onChange("month"); onCustomFromChange(""); onCustomToChange(""); setOpen(false); }}
-                className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline"
-              >
-                Clear custom range
+      {/* Mobile — full-screen bottom sheet */}
+      {open && isMobile && (
+        <div
+          className="fixed inset-0 z-[300] flex items-end"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full bg-white rounded-t-3xl overflow-hidden"
+            style={{ maxHeight: "80dvh" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="h-1 w-10 rounded-full bg-gray-200" />
+            </div>
+            <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-100">
+              <p className="text-sm font-medium text-gray-900">Select period</p>
+              <button onClick={() => setOpen(false)}
+                className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
+                ✕
               </button>
-            )}
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(80dvh - 80px)" }}>
+              <PeriodPanel
+                value={value} onChange={v => { onChange(v); if (v !== "custom") setOpen(false); }}
+                customFrom={customFrom} customTo={customTo}
+                onCustomFromChange={onCustomFromChange}
+                onCustomToChange={onCustomToChange}
+                onClear={() => { onChange("month"); onCustomFromChange(""); onCustomToChange(""); setOpen(false); }}
+              />
+            </div>
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+function PeriodPanel({ value, onChange, customFrom, customTo, onCustomFromChange, onCustomToChange, onClear }: {
+  value: string; onChange: (v:string) => void;
+  customFrom: string; customTo: string;
+  onCustomFromChange: (v:string) => void;
+  onCustomToChange: (v:string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div>
+      <div className="p-3">
+        <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">
+          Quick select
+        </p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {PRESETS.map(p => (
+            <button key={p.value} onClick={() => onChange(p.value)}
+              className={cn(
+                "rounded-lg border py-2.5 text-xs font-medium transition-colors text-center",
+                value === p.value && value !== "custom"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200 hover:bg-white"
+              )}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="h-px bg-gray-100 mx-3" />
+      <div className="p-3">
+        <button onClick={() => onChange("custom")}
+          className={cn(
+            "w-full flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors",
+            value === "custom"
+              ? "border-brand-400 bg-brand-50 text-brand-700"
+              : "border-dashed border-gray-300 text-gray-500 hover:border-brand-300 hover:text-brand-600"
+          )}>
+          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+          Custom date range
+        </button>
+        {value === "custom" && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] font-medium text-brand-600 block mb-1">From</label>
+              <input type="date" value={customFrom}
+                onChange={e => onCustomFromChange(e.target.value)}
+                className="w-full rounded-lg border border-brand-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:border-brand-400" />
+            </div>
+            <span className="text-gray-400 text-sm mt-4 flex-shrink-0">→</span>
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] font-medium text-brand-600 block mb-1">To</label>
+              <input type="date" value={customTo}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={e => onCustomToChange(e.target.value)}
+                className="w-full rounded-lg border border-brand-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:border-brand-400" />
+            </div>
+          </div>
+        )}
+        {value === "custom" && customFrom && customTo && (
+          <button onClick={onClear}
+            className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline">
+            Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -21,7 +21,7 @@ import type { Invoice, InvoiceStatus } from "@/types";
 const PAGE_SIZE = 20;
 
 const STATUS_OPTS = [
-  { value: "", label: "All statuses" },
+  { value: "", label: "All" },
   { value: "confirmed", label: "Confirmed" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },

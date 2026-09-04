@@ -5,62 +5,135 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ModalProps {
-  title:     string;
+  title: string;
   subtitle?: string;
-  onClose:   () => void;
-  children:  React.ReactNode;
-  size?:     "sm" | "md" | "lg";
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  size?: "sm" | "md" | "lg";
 }
 
-export function Modal({ title, subtitle, onClose, children, size = "md" }: ModalProps) {
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  size = "md",
+}: ModalProps) {
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, []);
 
-  const maxW = { sm: "sm:max-w-sm", md: "sm:max-w-md", lg: "sm:max-w-lg" }[size];
+  const maxW = {
+    sm: "sm:max-w-sm",
+    md: "sm:max-w-md",
+    lg: "sm:max-w-lg",
+  }[size];
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50"
+      className="
+        fixed inset-0
+        z-[99999]
+        flex items-end justify-center
+        bg-black/50
+        sm:items-center
+        sm:p-4
+      "
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       <div
         className={cn(
-          // Full width, rounded top on mobile, rounded all on desktop
-          "w-full bg-white",
+          "relative flex w-full min-h-0 flex-col overflow-hidden bg-white",
           "rounded-t-3xl sm:rounded-2xl",
-          // On mobile: sit at bottom, max 85% of screen height, scroll inside
-          "max-h-[85vh] sm:max-h-[90vh]",
-          "flex flex-col",
-          "sm:w-full sm:mx-4",
+          "max-h-[85dvh]",
+          "sm:max-h-[90dvh]",
           maxW
         )}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle — mobile only */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+        {/* Mobile drag handle */}
+        <div className="flex shrink-0 justify-center pt-3 pb-2 sm:hidden">
           <div className="h-1 w-10 rounded-full bg-gray-200" />
         </div>
 
-        {/* Header — fixed, doesn't scroll */}
-        <div className="flex items-center justify-between px-5 pt-3 pb-4 border-b border-gray-100 flex-shrink-0">
+        {/* HEADER */}
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
           <div className="min-w-0 flex-1 pr-3">
-            <h2 className="text-base font-semibold text-gray-900 truncate">{title}</h2>
-            {subtitle && <p className="text-xs text-gray-400 mt-0.5 truncate">{subtitle}</p>}
+            <h2 className="truncate text-base font-semibold text-gray-900">
+              {title}
+            </h2>
+
+            {subtitle && (
+              <p className="mt-0.5 truncate text-xs text-gray-400">
+                {subtitle}
+              </p>
+            )}
           </div>
+
           <button
+            type="button"
             onClick={onClose}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="
+              flex h-9 w-9 shrink-0
+              items-center justify-center
+              rounded-xl
+              border border-gray-200
+              bg-white
+              transition-colors
+              hover:bg-gray-50
+              active:bg-gray-100
+            "
+            aria-label="Close"
           >
             <X className="h-4 w-4 text-gray-500" />
           </button>
         </div>
 
-        {/* Body — scrollable */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
-          {children}
+        {/* SCROLLABLE CONTENT */}
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+            overflow-x-hidden
+            overscroll-contain
+          "
+          style={{
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          <div className="px-5 py-4">
+            {children}
+          </div>
         </div>
+
+        {/* FOOTER */}
+        {footer && (
+          <div
+            className="
+              relative z-20
+              shrink-0
+              border-t border-gray-200
+              bg-white
+              px-5
+              pt-3
+              pb-[max(12px,env(safe-area-inset-bottom))]
+              shadow-[0_-4px_12px_rgba(0,0,0,0.04)]
+            "
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

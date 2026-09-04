@@ -118,7 +118,7 @@ export function MobileHeader() {
           MOBILE HEADER
       ========================================================= */}
 
-      <header className="sticky top-0 z-40 flex h-[56px] items-center justify-between bg-brand-700 px-4 md:hidden">
+      <header className="sticky top-0 z-40 flex h-[56px] items-center justify-between bg-brand-900 px-4 md:hidden">
 
         {/* Brand */}
 

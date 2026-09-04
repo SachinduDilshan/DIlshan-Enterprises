@@ -71,7 +71,7 @@ export function MobileNav() {
         left:       0,
         right:      0,
         zIndex:     9999,
-        background: "white",
+        background: "#2D2B55",
         borderTop:  "0.5px solid #e5e7eb",
         display:    "flex",
         alignItems: "stretch",
@@ -88,7 +88,7 @@ export function MobileNav() {
                 justifyContent: "center",
                 gap:            "3px",
                 padding:        "8px 0 10px",
-                color:          active ? "#3730A3" : "#9ca3af",
+                color:          active ? "#6f68f7" : "#9ca3af",
                 fontSize:       "10px",
                 fontWeight:     500,
               }}>
@@ -110,7 +110,7 @@ export function MobileNav() {
               justifyContent: "center",
               gap:            "3px",
               padding:        "8px 0 10px",
-              color:          moreActive || moreOpen ? "#3730A3" : "#9ca3af",
+              color:          moreActive || moreOpen ? "#6f68f7" : "#9ca3af",
               fontSize:       "10px",
               fontWeight:     500,
               border:         "none",
@@ -171,7 +171,7 @@ export function MobileNav() {
                       background:     active ? "#eef2ff" : "#f9fafb",
                       fontSize:       12,
                       fontWeight:     500,
-                      color:          active ? "#3730A3" : "#4b5563",
+                      color:          active ? "#6f68f7" : "#4b5563",
                     }}>
                       <Icon style={{ width: 20, height: 20 }} />
                       {label}
