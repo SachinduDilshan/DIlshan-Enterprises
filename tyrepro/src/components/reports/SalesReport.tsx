@@ -155,72 +155,38 @@ export default function DailySalesReport() {
   =========================================================================== */
 
   useEffect(() => {
-    if (
-      range === "custom" &&
-      (!customFrom || !customTo)
-    ) {
+    if (range === "custom" && (!customFrom || !customTo)) {
       setLoading(false);
       setInvoices([]);
       return;
     }
 
+    let cancelled = false;
     setLoading(true);
 
     async function load() {
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, "invoices"),
-
-            where(
-              "status",
-              "==",
-              "confirmed"
-            ),
-
-            where(
-              "invoiceDate",
-              ">=",
-              Timestamp.fromDate(start)
-            ),
-
-            where(
-              "invoiceDate",
-              "<=",
-              Timestamp.fromDate(end)
-            ),
-
-            orderBy(
-              "invoiceDate",
-              "desc"
-            )
-          )
-        );
-
-        setInvoices(
-          snap.docs.map(
-            (d) =>
-              ({
-                id: d.id,
-                ...d.data(),
-              }) as Invoice
-          )
-        );
-      } catch {
-        setInvoices([]);
+        const { start, end } = getDateRange(range, customFrom, customTo);
+        const snap = await getDocs(query(
+          collection(db, "invoices"),
+          where("status", "==", "confirmed"),
+          where("invoiceDate", ">=", Timestamp.fromDate(start)),
+          where("invoiceDate", "<=", Timestamp.fromDate(end)),
+          orderBy("invoiceDate", "desc")
+        ));
+        if (!cancelled) {
+          setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)));
+        }
+      } catch (err) {
+        console.error("Sales report load error:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setLoading(false);
     }
 
     load();
-  }, [
-    range,
-    customFrom,
-    customTo,
-    start,
-    end,
-  ]);
+    return () => { cancelled = true; };
+  }, [range, customFrom, customTo]);
 
 
   /* =========================================================================
@@ -305,17 +271,17 @@ export default function DailySalesReport() {
 
       byMonth[month] = byMonth[month]
         ? {
-            total:
-              byMonth[month].total +
-              invoice.totalAmount,
+          total:
+            byMonth[month].total +
+            invoice.totalAmount,
 
-            count:
-              byMonth[month].count + 1,
-          }
+          count:
+            byMonth[month].count + 1,
+        }
         : {
-            total: invoice.totalAmount,
-            count: 1,
-          };
+          total: invoice.totalAmount,
+          count: 1,
+        };
     });
   }
 
@@ -343,14 +309,14 @@ export default function DailySalesReport() {
           invoice.paymentType === "cash"
             ? "Cash"
             : invoice.paymentType
-                .replace(
-                  "cheque_",
-                  "Cheque "
-                )
-                .replace(
-                  "d",
-                  " days"
-                ),
+              .replace(
+                "cheque_",
+                "Cheque "
+              )
+              .replace(
+                "d",
+                " days"
+              ),
 
         "Amount (Rs)":
           invoice.totalAmount,
@@ -401,14 +367,14 @@ export default function DailySalesReport() {
         invoice.paymentType === "cash"
           ? "Cash"
           : invoice.paymentType
-              .replace(
-                "cheque_",
-                "Cheque "
-              )
-              .replace(
-                "d",
-                " days"
-              ),
+            .replace(
+              "cheque_",
+              "Cheque "
+            )
+            .replace(
+              "d",
+              " days"
+            ),
 
         `Rs ${invoice.totalAmount.toLocaleString()}`,
 
@@ -659,8 +625,8 @@ export default function DailySalesReport() {
             "
           >
             {range === "custom" &&
-            (!customFrom ||
-              !customTo)
+              (!customFrom ||
+                !customTo)
               ? "Select a date range above to view sales"
               : "No sales in this period"}
           </Card>
@@ -674,7 +640,7 @@ export default function DailySalesReport() {
       {!loading &&
         showGrouped &&
         Object.keys(byMonth).length >
-          0 && (
+        0 && (
           <Card padding={false}>
 
             <div
@@ -706,8 +672,8 @@ export default function DailySalesReport() {
                   className={cn(
                     "flex items-center justify-between px-4 py-3",
                     index <
-                      array.length - 1 &&
-                      "border-b border-gray-50"
+                    array.length - 1 &&
+                    "border-b border-gray-50"
                   )}
                 >
                   <div className="min-w-0">
@@ -814,8 +780,8 @@ export default function DailySalesReport() {
                     className={cn(
                       "flex items-center justify-between px-4 py-3",
                       index <
-                        invs.length - 1 &&
-                        "border-b border-gray-50"
+                      invs.length - 1 &&
+                      "border-b border-gray-50"
                     )}
                   >
 
@@ -830,17 +796,17 @@ export default function DailySalesReport() {
                       <p className="text-xs text-gray-400">
                         {invoice.invoiceNo} ·{" "}
                         {invoice.paymentType ===
-                        "cash"
+                          "cash"
                           ? "Cash"
                           : invoice.paymentType
-                              .replace(
-                                "cheque_",
-                                "Cheque "
-                              )
-                              .replace(
-                                "d",
-                                " days"
-                              )}
+                            .replace(
+                              "cheque_",
+                              "Cheque "
+                            )
+                            .replace(
+                              "d",
+                              " days"
+                            )}
                       </p>
                     </div>
 
