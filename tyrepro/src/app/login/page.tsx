@@ -75,7 +75,7 @@ export default function LoginPage() {
               <circle cx="14" cy="14" r="3.5" fill="white"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Welcome back</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Welcome Back!</h1>
           <p className="text-sm text-gray-500 mt-1.5">Sign in to Tyre Distribution Management System</p>
         </div>
 
@@ -141,7 +141,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60"
               style={{ background: loading ? "#4338CA" : "#2D2B55" }}
-              onMouseEnter={e => !loading && ((e.target as HTMLButtonElement).style.background = "#3730A3")}
+              onMouseEnter={e => !loading && ((e.target as HTMLButtonElement).style.background = "#403d81")}
               onMouseLeave={e => !loading && ((e.target as HTMLButtonElement).style.background = "#2D2B55")}
             >
               {loading ? (

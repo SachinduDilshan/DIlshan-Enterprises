@@ -1591,7 +1591,7 @@ export default function InventoryPage() {
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-xl font-medium text-gray-900">
-            Inventory
+            INVENTORY
           </h1>
 
           <p className="text-sm text-gray-500">

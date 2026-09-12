@@ -340,7 +340,7 @@ export default function ChequesPage() {
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-xl font-medium text-gray-900">Cheque tracker</h1>
+        <h1 className="text-xl font-medium text-gray-900">CHEQUE TRACKER</h1>
         <p className="text-sm text-gray-500">Monitor post-dated cheques</p>
       </div>
 

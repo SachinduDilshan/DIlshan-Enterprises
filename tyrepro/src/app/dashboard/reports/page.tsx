@@ -66,11 +66,11 @@ export default function ReportsPage() {
       ===================================================== */}
       <div className="mb-4 px-1">
         <h1 className="text-lg font-medium text-gray-900 md:text-xl">
-          Reports
+          REPORTS
         </h1>
 
         <p className="mt-0.5 text-xs text-gray-500 md:text-sm">
-          Dilshan Enterprises — business overview
+          Business overview
         </p>
       </div>
 

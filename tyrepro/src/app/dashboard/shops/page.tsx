@@ -38,7 +38,7 @@ export default function ShopsPage() {
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-medium text-gray-900">Shops</h1>
+          <h1 className="text-xl font-medium text-gray-900">SHOPS</h1>
           <p className="text-sm text-gray-500">{shops.length} registered shops</p>
         </div>
         <Link href="/dashboard/shops/new">
