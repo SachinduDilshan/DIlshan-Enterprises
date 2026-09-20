@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Tabs } from "@/components/ui/Tabs";
+import { useNotifications } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
 import {
   Plus, PackageCheck, Send, Clock, CheckCircle,
@@ -26,21 +27,21 @@ import type { UCReturn, UCReturnStatus } from "@/types";
 // ── Constants ─────────────────────────────────────────────
 
 const STATUS_META: Record<UCReturnStatus, {
-  label: string; badge: "warning"|"info"|"default"|"success";
+  label: string; badge: "warning" | "info" | "default" | "success";
   icon: React.ElementType; btnClass: string;
 }> = {
-  approved:             { label: "Tyre with us",       badge: "warning", icon: PackageCheck, btnClass: "bg-amber-600 hover:bg-amber-700 text-white border-0" },
-  sent_to_supplier:     { label: "Sent to CEAT",        badge: "info",    icon: Send,         btnClass: "bg-blue-600 hover:bg-blue-700 text-white border-0"   },
-  awaiting_replacement: { label: "Awaiting replacement",badge: "default", icon: Clock,        btnClass: "bg-gray-700 hover:bg-gray-800 text-white border-0"   },
-  closed:               { label: "Closed",              badge: "success", icon: CheckCircle,  btnClass: "bg-green-600 hover:bg-green-700 text-white border-0"  },
+  approved: { label: "Tyre with us", badge: "warning", icon: PackageCheck, btnClass: "bg-amber-600 hover:bg-amber-700 text-white border-0" },
+  sent_to_supplier: { label: "Sent to CEAT", badge: "info", icon: Send, btnClass: "bg-blue-600 hover:bg-blue-700 text-white border-0" },
+  awaiting_replacement: { label: "Awaiting replacement", badge: "default", icon: Clock, btnClass: "bg-gray-700 hover:bg-gray-800 text-white border-0" },
+  closed: { label: "Closed", badge: "success", icon: CheckCircle, btnClass: "bg-green-600 hover:bg-green-700 text-white border-0" },
 };
 
 const REASON_LABELS: Record<string, string> = {
-  sidewall_bulge:       "Sidewall bulge",
-  tread_separation:     "Tread separation",
+  sidewall_bulge: "Sidewall bulge",
+  tread_separation: "Tread separation",
   manufacturing_defect: "Manufacturing defect",
-  bead_damage:          "Bead damage",
-  other:                "Other",
+  bead_damage: "Bead damage",
+  other: "Other",
 };
 
 function fmtDt(ts: Timestamp | undefined): string {
@@ -84,12 +85,12 @@ function UndoToast({ undo, onUndo, onDismiss }: {
 // ── Edit UC return modal ──────────────────────────────────
 
 function EditUCModal({ uc, onClose }: { uc: UCReturn; onClose: () => void }) {
-  const [qty, setQty]             = useState(uc.qty);
+  const [qty, setQty] = useState(uc.qty);
   const [unitPrice, setUnitPrice] = useState((uc as any).unitPrice ?? 0);
-  const [reason, setReason]       = useState(uc.reason);
-  const [reasonNotes, setNotes]   = useState((uc as any).reasonNotes ?? "");
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
+  const [reason, setReason] = useState(uc.reason);
+  const [reasonNotes, setNotes] = useState((uc as any).reasonNotes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -123,11 +124,11 @@ function EditUCModal({ uc, onClose }: { uc: UCReturn; onClose: () => void }) {
         <Dropdown label="Reason" value={reason}
           onChange={v => setReason(v as any)}
           options={[
-            { value: "sidewall_bulge",       label: "Sidewall bulge"       },
-            { value: "tread_separation",     label: "Tread separation"     },
+            { value: "sidewall_bulge", label: "Sidewall bulge" },
+            { value: "tread_separation", label: "Tread separation" },
             { value: "manufacturing_defect", label: "Manufacturing defect" },
-            { value: "bead_damage",          label: "Bead damage"          },
-            { value: "other",                label: "Other"                },
+            { value: "bead_damage", label: "Bead damage" },
+            { value: "other", label: "Other" },
           ]} />
         <Input label="Additional notes" value={reasonNotes}
           onChange={e => setNotes(e.target.value)}
@@ -144,28 +145,28 @@ function UCCard({ uc, isAdmin, onAction, onDelete, onEdit }: {
   uc: UCReturn; isAdmin: boolean;
   onAction: (ucId: string, newStatus: UCReturnStatus, fields: Record<string, any>, prevFields: Record<string, any>, message: string) => void;
   onDelete: (uc: UCReturn) => void;
-  onEdit:   (uc: UCReturn) => void;
+  onEdit: (uc: UCReturn) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const meta       = STATUS_META[uc.status];
+  const meta = STATUS_META[uc.status];
   const StatusIcon = meta.icon;
   const daysWithUs = daysSince(uc.tyreReceivedAt);
-  const daysSent   = daysSince(uc.sentToSupplierAt);
-  const totalVal   = (uc as any).totalValue ?? 0;
+  const daysSent = daysSince(uc.sentToSupplierAt);
+  const totalVal = (uc as any).totalValue ?? 0;
 
   const STEPS = [
-    { label: "Received from shop", done: uc.tyreReceivedFromShop,     date: uc.tyreReceivedAt        },
-    { label: "Sent to CEAT",       done: !!uc.sentToSupplierAt,       date: uc.sentToSupplierAt      },
-    { label: "Replacement back",   done: !!uc.replacementReceivedAt,  date: uc.replacementReceivedAt },
+    { label: "Received from shop", done: uc.tyreReceivedFromShop, date: uc.tyreReceivedAt },
+    { label: "Sent to CEAT", done: !!uc.sentToSupplierAt, date: uc.sentToSupplierAt },
+    { label: "Replacement back", done: !!uc.replacementReceivedAt, date: uc.replacementReceivedAt },
   ];
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-3 transition-shadow hover:shadow-sm">
       {/* Status bar at top */}
       <div className={cn("h-1 w-full",
-        uc.status === "approved"             ? "bg-amber-400" :
-        uc.status === "sent_to_supplier"     ? "bg-blue-400"  :
-        uc.status === "awaiting_replacement" ? "bg-gray-300"  : "bg-green-400"
+        uc.status === "approved" ? "bg-amber-400" :
+          uc.status === "sent_to_supplier" ? "bg-blue-400" :
+            uc.status === "awaiting_replacement" ? "bg-gray-300" : "bg-green-400"
       )} />
 
       <div className="p-4">
@@ -344,11 +345,11 @@ function UCCard({ uc, isAdmin, onAction, onDelete, onEdit }: {
 // ── Summary ───────────────────────────────────────────────
 
 function Summary({ returns }: { returns: UCReturn[] }) {
-  const totalQty   = returns.reduce((s, r) => s + r.qty, 0);
+  const totalQty = returns.reduce((s, r) => s + r.qty, 0);
   const totalValue = returns.reduce((s, r) => s + ((r as any).totalValue ?? 0), 0);
-  const withUs     = returns.filter(r => r.status === "approved").length;
-  const withCEAT   = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
-  const notGiven   = returns.filter(r => !r.gaveTyreToShop).length;
+  const withUs = returns.filter(r => r.status === "approved").length;
+  const withCEAT = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
+  const notGiven = returns.filter(r => !r.gaveTyreToShop).length;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-5">
@@ -383,15 +384,16 @@ function Summary({ returns }: { returns: UCReturn[] }) {
 type TabKey = "active" | "closed";
 
 export default function UCReturnsPage() {
-  const { appUser }                   = useAuth();
-  const isAdmin                       = appUser?.role === "admin";
-  const [allReturns, setAllReturns]   = useState<UCReturn[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [tab, setTab]                 = useState<TabKey>("active");
-  const [undoState, setUndoState]     = useState<UndoState | null>(null);
-  const [toDelete, setToDelete]       = useState<UCReturn | null>(null);
-  const [editUC, setEditUC]           = useState<UCReturn | null>(null);
-  const undoTimer                     = useRef<NodeJS.Timeout | null>(null);
+  const { appUser } = useAuth();
+  const isAdmin = appUser?.role === "admin";
+  const [allReturns, setAllReturns] = useState<UCReturn[]>([]);
+  const { refreshAlerts } = useNotifications();
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>("active");
+  const [undoState, setUndoState] = useState<UndoState | null>(null);
+  const [toDelete, setToDelete] = useState<UCReturn | null>(null);
+  const [editUC, setEditUC] = useState<UCReturn | null>(null);
+  const undoTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const q = query(ucReturnsCol, orderBy("createdAt", "desc"));
@@ -413,6 +415,10 @@ export default function UCReturnsPage() {
     fields: Record<string, any>, prevFields: Record<string, any>, message: string
   ) {
     await updateDoc(doc(ucReturnsCol, ucId), { ...fields, updatedAt: serverTimestamp() });
+
+    // Refresh alerts after a short delay so Firestore propagates
+    setTimeout(() => refreshAlerts(), 1500);
+
     if (undoTimer.current) clearInterval(undoTimer.current);
     setUndoState({ ucId, prevFields, message, countdown: 10 });
     undoTimer.current = setInterval(() => {
@@ -427,7 +433,10 @@ export default function UCReturnsPage() {
   async function handleUndo() {
     if (!undoState) return;
     clearInterval(undoTimer.current!);
-    await updateDoc(doc(ucReturnsCol, undoState.ucId), { ...undoState.prevFields, updatedAt: serverTimestamp() });
+    await updateDoc(doc(ucReturnsCol, undoState.ucId), {
+      ...undoState.prevFields, updatedAt: serverTimestamp(),
+    });
+    setTimeout(() => refreshAlerts(), 1500);
     setUndoState(null);
   }
 
@@ -462,7 +471,7 @@ export default function UCReturnsPage() {
         active={tab}
         onChange={k => setTab(k as TabKey)}
         options={[
-          { key: "active", label: `Active (${activeReturns.length})`                              },
+          { key: "active", label: `Active (${activeReturns.length})` },
           { key: "closed", label: `Closed (${allReturns.filter(r => r.status === "closed").length})` },
         ]}
       />
