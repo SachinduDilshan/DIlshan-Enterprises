@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 async function getAdmin() {
   const { getApps, initializeApp, cert } = await import("firebase-admin/app");
-  const { getFirestore }                 = await import("firebase-admin/firestore");
+  const { getFirestore } = await import("firebase-admin/firestore");
   if (getApps().length === 0) {
     initializeApp({
       credential: cert({
-        projectId:   process.env.FIREBASE_ADMIN_PROJECT_ID!,
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
         clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL!,
-        privateKey:  process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
       }),
     });
   }
@@ -26,7 +26,7 @@ async function sendEmail(to: string, subject: string, html: string) {
     },
   });
   await transporter.sendMail({
-    from:    `"TyrePro — Dilshan Enterprises" <${process.env.GMAIL_USER}>`,
+    from: `"TyrePro — Dilshan Enterprises" <${process.env.GMAIL_USER}>`,
     to,
     subject,
     html,
@@ -34,14 +34,25 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 function buildEmailHtml(alerts: { type: string; message: string; count: number; items: string[] }[]) {
-  const alertRows = alerts.map(a => `
-    <div style="margin-bottom:16px;padding:14px 16px;border-radius:8px;background:#f9f9f9;border-left:4px solid #4338CA">
-      <p style="margin:0 0 6px;font-size:14px;font-weight:600;color:#1a1a1a">${a.count} × ${a.message}</p>
-      <ul style="margin:0;padding-left:18px">
-        ${a.items.map(i => `<li style="font-size:13px;color:#555;margin-bottom:3px">${i}</li>`).join("")}
-      </ul>
-    </div>
-  `).join("");
+  const alertRows = alerts.map(a => {
+    const isUrgent = a.type === "cheque_due_today" || a.type === "cheque_overdue";
+    const borderColor = isUrgent ? "#EF4444" : a.type.includes("cheque") ? "#F59E0B" : "#4338CA";
+    const bgColor = isUrgent ? "#FEF2F2" : "#F9FAFB";
+
+    return `
+      <div style="margin-bottom:16px;padding:14px 16px;border-radius:8px;background:${bgColor};border-left:4px solid ${borderColor}">
+        <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#1a1a1a">
+          ${isUrgent ? "🔴" : "🟡"} ${a.message}
+        </p>
+        <p style="margin:0 0 8px;font-size:12px;color:#666">${a.count} item${a.count > 1 ? "s" : ""} require attention</p>
+        <ul style="margin:0;padding-left:18px">
+          ${a.items.map(i => `<li style="font-size:13px;color:#444;margin-bottom:4px">${i}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }).join("");
+
+  const hasUrgent = alerts.some(a => a.type === "cheque_due_today" || a.type === "cheque_overdue");
 
   return `
     <!DOCTYPE html>
@@ -50,23 +61,41 @@ function buildEmailHtml(alerts: { type: string; message: string; count: number; 
       <div style="max-width:600px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e5e5">
         <div style="background:#3730A3;padding:24px 28px">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">Dilshan Enterprises</h1>
-          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">TyrePro — Daily Alert Summary</p>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">
+            TyrePro — Morning Alert Summary · ${new Date().toLocaleDateString("en-LK", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+          </p>
         </div>
+
+        ${hasUrgent ? `
+        <div style="background:#FEF2F2;border-bottom:2px solid #EF4444;padding:12px 28px">
+          <p style="margin:0;font-size:14px;font-weight:600;color:#991B1B">
+            ⚠️ Action required today — cheque(s) due for deposit
+          </p>
+        </div>
+        ` : ""}
+
         <div style="padding:24px 28px">
           <p style="margin:0 0 20px;font-size:14px;color:#444">
-            The following alerts were generated for your account. Please review and take action as needed.
+            Good morning. Here is your daily alert summary for today.
+            Please review and take action as needed.
           </p>
           ${alertRows}
           <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/cheques"
+               style="display:inline-block;background:#4338CA;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;margin-right:8px">
+              View cheques →
+            </a>
             <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard"
-               style="display:inline-block;background:#4338CA;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500">
-              Open dashboard →
+               style="display:inline-block;background:#f3f4f6;color:#374151;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500">
+              Open dashboard
             </a>
           </div>
         </div>
-        <div style="padding:16px 28px;background:#f9f9f9;border-top:1px solid #eee">
+
+        <div style="padding:16px 28px;background:#f9fafb;border-top:1px solid #eee">
           <p style="margin:0;font-size:12px;color:#999">
-            This is an automated alert from TyrePro. Generated at ${new Date().toLocaleString("en-LK")}.
+            This alert was generated automatically at 7:00 AM Sri Lanka time.
+            Sent by TyrePro for Dilshan Enterprises.
           </p>
         </div>
       </div>
@@ -96,7 +125,7 @@ export async function POST(req: NextRequest) {
 
     // Load all users
     const usersSnap = await db.collection("users").where("active", "==", true).get();
-    let emailsSent  = 0;
+    let emailsSent = 0;
     const errors: string[] = [];
 
     for (const userDoc of usersSnap.docs) {
@@ -107,8 +136,8 @@ export async function POST(req: NextRequest) {
       if (role === "driver" || !email) continue;
 
       // Load user's notification preferences
-      const prefSnap  = await db.collection("alertSettings").doc(uid).get();
-      const prefs     = prefSnap.exists ? prefSnap.data() ?? {} : {};
+      const prefSnap = await db.collection("alertSettings").doc(uid).get();
+      const prefs = prefSnap.exists ? prefSnap.data() ?? {} : {};
 
       // Build alerts for this user based on role + preferences
       let userAlerts = allAlerts.filter(a => {
@@ -126,18 +155,18 @@ export async function POST(req: NextRequest) {
 
       try {
         const subject = `TyrePro alert: ${userAlerts.length} item${userAlerts.length > 1 ? "s" : ""} need attention`;
-        const html    = buildEmailHtml(userAlerts);
+        const html = buildEmailHtml(userAlerts);
         await sendEmail(email, subject, html);
         emailsSent++;
 
         // Log that email was sent
         await db.collection("emailLogs").add({
-          to:        email,
+          to: email,
           uid,
           role,
           alertCount: userAlerts.length,
           alertTypes: userAlerts.map(a => a.type),
-          sentAt:    new Date(),
+          sentAt: new Date(),
         });
       } catch (err: any) {
         errors.push(`${email}: ${err.message}`);
