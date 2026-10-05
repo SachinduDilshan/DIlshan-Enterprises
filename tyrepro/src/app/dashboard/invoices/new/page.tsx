@@ -741,6 +741,8 @@ export default function NewInvoicePage() {
             {
               invoiceNo,
 
+              notes: "",
+
               shopId:
                 selectedShop.id,
 

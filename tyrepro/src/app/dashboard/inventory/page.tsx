@@ -33,6 +33,7 @@ import type { Stock, Product, TyreType } from "@/types";
 
 import {
   addDoc,
+  setDoc,
   serverTimestamp,
   doc,
   updateDoc,
@@ -598,7 +599,10 @@ function ProductModal({
           }
         );
       } else {
-        await addDoc(productsCol, {
+        const productRef = doc(productsCol);
+
+        await setDoc(productRef, {
+          id: productRef.id,
           sku,
           name: finalName,
           brand: finalBrand,
@@ -1111,7 +1115,8 @@ function TransferModal({
     setError("");
 
     try {
-      await addDoc(transfersCol, {
+      const transferRef = await addDoc(transfersCol, {
+        id: "",
         fromWarehouseId: fromWh,
         fromWarehouseName:
           WAREHOUSES.find(
@@ -1146,6 +1151,10 @@ function TransferModal({
 
         completedAt:
           serverTimestamp(),
+      });
+
+      await updateDoc(transferRef, {
+        id: transferRef.id,
       });
 
       const fromDocId =

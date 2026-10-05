@@ -119,26 +119,27 @@ export default function NewUCReturnPage() {
     try {
       // NO stock changes — UC tyres are completely separate from inventory
       await addDoc(ucReturnsCol, {
+        id:                   "",
+        warehouseId:          "",
+        warehouseName:        "",
         shopId:               selectedShop.id,
         shopName:             selectedShop.name,
         shopCity:             selectedShop.city,
         productId,
         productName,
         productSku,
-        unitPrice:            unitPrice ?? 0,
         qty,
-        totalValue:           (unitPrice ?? 0) * qty,
         reason,
-        reasonNotes:          reasonNotes.trim() !== "" ? reasonNotes.trim() : null,
+        reasonNotes:          reasonNotes.trim() !== "" ? reasonNotes.trim() : undefined,
         status:               "approved",
         gaveTyreToShop,
         gaveTyreToShopAt:     gaveTyreToShop
           ? Timestamp.fromDate(new Date(gaveTyreAt))
-          : null,
+          : undefined,
         tyreReceivedFromShop: true,
         tyreReceivedAt:       Timestamp.fromDate(new Date(returnReceivedAt)),
-        sentToSupplierAt:     null,
-        replacementReceivedAt: null,
+        sentToSupplierAt:     undefined,
+        replacementReceivedAt: undefined,
         createdBy:            appUser?.uid ?? "",
         createdAt:            serverTimestamp(),
         updatedAt:            serverTimestamp(),

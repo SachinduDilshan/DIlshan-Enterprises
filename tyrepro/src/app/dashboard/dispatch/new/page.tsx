@@ -112,7 +112,9 @@ export default function NewDispatchPage() {
 
     try {
       const wh = WAREHOUSES.find(w => w.value === warehouseId)!;
-      const dispatchRef = await addDoc(dispatchesCol, {
+      const dispatchRef = doc(dispatchesCol);
+      await setDoc(dispatchRef, {
+        id: dispatchRef.id,
         lorryReg,
         lorryModel,
         fromWarehouseId: warehouseId,
@@ -140,8 +142,8 @@ export default function NewDispatchPage() {
           items: s.items,
           totalUnits: s.items.reduce((sum, it) => sum + it.qty, 0),
           status: "pending",
-          deliveredAt: null,
-          skippedReason: null,
+          deliveredAt: null as any,
+          skippedReason: null as any,
         });
       }
 
