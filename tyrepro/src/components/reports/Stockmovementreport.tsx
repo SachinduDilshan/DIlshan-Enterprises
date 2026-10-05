@@ -24,7 +24,7 @@ export default function StockMovementReport() {
   const { appUser } = useAuth();
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [whFilter, setWhFilter] = useState("");
+  const [whFilter] = useState("");
   const { stock, lowStockItems } = useStock();
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
 
