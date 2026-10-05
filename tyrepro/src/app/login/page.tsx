@@ -45,7 +45,7 @@ export default function LoginPage() {
         style={{ minHeight: "100vh" }}
       >
         <img
-          src="images/ceat-dilshan-banner.png"
+          src="Images/ceat-dilshan-banner.png"
           alt="Dilshan Enterprises — CEAT Tire Dealer"
           className="absolute inset-0 w-full h-full object-cover"
         />
