@@ -16,7 +16,7 @@ import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelecto
 
 const WAREHOUSES = [
   { value: "", label: "All warehouses" },
-  { value: "polonnaruwa", label: "Polonnaruwa" },
+  { value: "kurunegala", label: "Kurunegala" },
   { value: "anuradhapura", label: "Anuradhapura" },
 ];
 
