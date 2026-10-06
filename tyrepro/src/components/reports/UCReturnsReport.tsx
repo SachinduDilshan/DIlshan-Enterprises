@@ -1,142 +1,168 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { query, getDocs, orderBy, collection } from "firebase/firestore";
+import {
+  collection, query, orderBy, getDocs,
+  where, Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { formatDate } from "@/lib/utils";
-import { RotateCcw, AlertTriangle, FileSpreadsheet, Download } from "lucide-react";
-import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
-import { cn } from "@/lib/utils";
-import { Timestamp } from "firebase/firestore";
-import type { UCReturn, UCReturnStatus } from "@/types";
+import { Badge } from "@/components/ui/Badge";
+import { FileSpreadsheet, Download, RotateCcw } from "lucide-react";
 import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
+import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
+import { formatDate, formatLKR } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-function daysSince(ts: Timestamp | undefined) {
-  if (!ts) return null;
-  return Math.floor((Date.now() - ts.toDate().getTime()) / 86_400_000);
+interface UCReturn {
+  id:                    string;
+  shopName:              string;
+  shopCity:              string;
+  productName:           string;
+  productSku:            string;
+  qty:                   number;
+  unitPrice:             number;
+  totalValue:            number;
+  reason:                string;
+  status:                string;
+  tyreReceivedAt?:       any;
+  sentToSupplierAt?:     any;
+  replacementReceivedAt?:any;
+  createdAt?:            any;
 }
 
-const STATUS_LABELS: Record<UCReturnStatus, string> = {
-  approved: "Approved",
-  sent_to_supplier: "Sent to CEAT",
-  awaiting_replacement: "Awaiting replacement",
-  closed: "Closed",
-};
-
-const STATUS_VARIANT: Record<UCReturnStatus, "warning" | "info" | "default" | "success"> = {
-  approved: "warning",
-  sent_to_supplier: "info",
-  awaiting_replacement: "default",
-  closed: "success",
-};
-
 const REASON_LABELS: Record<string, string> = {
-  sidewall_bulge: "Sidewall bulge",
-  tread_separation: "Tread separation",
+  sidewall_bulge:       "Sidewall bulge",
+  tread_separation:     "Tread separation",
   manufacturing_defect: "Manufacturing defect",
-  bead_damage: "Bead damage",
-  other: "Other",
+  bead_damage:          "Bead damage",
+  other:                "Other",
 };
+
+const STATUS_META: Record<string, { label: string; badge: "warning"|"info"|"default"|"success" }> = {
+  approved:             { label: "Tyre with us",        badge: "warning" },
+  sent_to_supplier:     { label: "Sent to CEAT",        badge: "info"    },
+  awaiting_replacement: { label: "Awaiting replacement",badge: "default" },
+  closed:               { label: "Closed",              badge: "success" },
+};
+
+const STATUS_FILTERS = [
+  { value: "all",                  label: "All"         },
+  { value: "approved",             label: "Tyre with us"},
+  { value: "sent_to_supplier",     label: "Sent CEAT"   },
+  { value: "awaiting_replacement", label: "Awaiting"    },
+  { value: "closed",               label: "Closed"      },
+];
 
 export default function UCReturnsReport() {
-  const { appUser } = useAuth();
-  const [returns, setReturns] = useState<UCReturn[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | UCReturnStatus>("all");
+  const { appUser }                   = useAuth();
+  const [range, setRange]             = useState("alltime");
+  const [customFrom, setCustomFrom]   = useState("");
+  const [customTo, setCustomTo]       = useState("");
+  const [returns, setReturns]         = useState<UCReturn[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [statusFilter, setStatusFilter] = useState("all");
+
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
-
-  const [range, setRange] = useState("alltime");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-
-  const { start, end, label: rangeLabel } = getDateRange(range, customFrom, customTo);
+  const { start, end, label } = getDateRange(range, customFrom, customTo);
 
   useEffect(() => {
-    if (range === "custom" && (!customFrom || !customTo)) { setLoading(false); return; }
+    if (range === "custom" && (!customFrom || !customTo)) {
+      setLoading(false); setReturns([]); return;
+    }
+    let cancelled = false;
     setLoading(true);
+
     async function load() {
       try {
-        const snap = await getDocs(query(collection(db, "ucReturns"), orderBy("createdAt", "desc")));
+        const snap = await getDocs(query(
+          collection(db, "ucReturns"),
+          orderBy("createdAt", "desc")
+        ));
         const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as UCReturn));
-        const inRange = range === "alltime"
+        const filtered = range === "alltime"
           ? all
           : all.filter(r => {
-            const d = r.tyreReceivedAt?.toDate?.() ?? r.createdAt?.toDate?.();
-            return d && d >= start && d <= end;
-          });
-        setReturns(inRange);
-      } catch { }
-      setLoading(false);
+              const d = r.tyreReceivedAt?.toDate?.() ?? r.createdAt?.toDate?.();
+              return d && d >= start && d <= end;
+            });
+        if (!cancelled) setReturns(filtered);
+      } catch {}
+      finally { if (!cancelled) setLoading(false); }
     }
     load();
+    return () => { cancelled = true; };
   }, [range, customFrom, customTo]);
 
-  const active = returns.filter(r => r.status !== "closed");
-  const closed = returns.filter(r => r.status === "closed");
-  const withUs = returns.filter(r => r.status === "approved");
-  const withCEAT = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement");
+  const displayed = statusFilter === "all"
+    ? returns
+    : returns.filter(r => r.status === statusFilter);
 
-  const alertNotSent = returns.filter(r => r.status === "approved" && (daysSince(r.tyreReceivedAt) ?? 0) >= 3);
-  const alertLongCEAT = returns.filter(r => (r.status === "sent_to_supplier" || r.status === "awaiting_replacement") && (daysSince(r.sentToSupplierAt) ?? 0) >= 30);
-
-  const displayed = filter === "all" ? returns : returns.filter(r => r.status === filter);
+  // Summary stats
+  const totalValue  = returns.reduce((s, r) => s + (r.totalValue ?? 0), 0);
+  const totalQty    = returns.reduce((s, r) => s + r.qty, 0);
+  const activeCount = returns.filter(r => r.status !== "closed").length;
+  const closedCount = returns.filter(r => r.status === "closed").length;
+  const withUsCount = returns.filter(r => r.status === "approved").length;
+  const withCEAT    = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
 
   function handleExcelExport() {
     exportToExcel(
       displayed.map(r => ({
-        "Shop": r.shopName,
-        "City": r.shopCity,
-        "Tyre": r.productName,
-        "Qty": r.qty,
-        "Return Value (Rs)": (r as any).totalValue ?? 0,
-        "Reason": REASON_LABELS[r.reason] ?? r.reason,
-        "Status": STATUS_LABELS[r.status],
-        "Replacement Given": r.gaveTyreToShop ? "Yes" : "No",
-        "Received At": r.tyreReceivedAt ? formatDate(r.tyreReceivedAt) : "—",
-        "Sent to CEAT": r.sentToSupplierAt ? formatDate(r.sentToSupplierAt) : "—",
-        "Replacement Received": r.replacementReceivedAt ? formatDate(r.replacementReceivedAt) : "—",
-        "Days with us": r.tyreReceivedAt ? String(daysSince(r.tyreReceivedAt) ?? "—") : "—",
-        "Days with CEAT": r.sentToSupplierAt ? String(daysSince(r.sentToSupplierAt) ?? "—") : "—",
+        "Shop":             r.shopName,
+        "City":             r.shopCity,
+        "Product":          r.productName,
+        "SKU":              r.productSku,
+        "Qty":              r.qty,
+        "Unit price (Rs)":  r.unitPrice,
+        "Total value (Rs)": r.totalValue,
+        "Reason":           REASON_LABELS[r.reason] ?? r.reason,
+        "Status":           STATUS_META[r.status]?.label ?? r.status,
+        "Received":         formatDate(r.tyreReceivedAt),
+        "Sent to CEAT":     formatDate(r.sentToSupplierAt),
+        "Replacement back": formatDate(r.replacementReceivedAt),
       })),
-      `UC-Returns-${filter}`,
+      `UC-Returns-${label.replace(/[\s/–]/g, "-")}`,
       "UC Returns"
     );
   }
 
   function handlePDFExport() {
-    const totalValue = displayed.reduce((s, r) => s + ((r as any).totalValue ?? 0), 0);
     exportToPDF(
-      "UC Returns Report",
-      filter === "all" ? "All returns" : STATUS_LABELS[filter as UCReturnStatus],
-      ["Shop", "Tyre", "Qty", "Value", "Reason", "Status", "Given", "Days with us", "Days CEAT"],
+      `UC Returns Report — ${label}`,
+      label,
+      ["Shop","Product","Qty","Value","Reason","Status","Received"],
       displayed.map(r => [
-        r.shopName, r.productName, r.qty,
-        `Rs ${((r as any).totalValue ?? 0).toLocaleString()}`,
+        r.shopName, r.productName, String(r.qty),
+        `Rs ${(r.totalValue ?? 0).toLocaleString()}`,
         REASON_LABELS[r.reason] ?? r.reason,
-        STATUS_LABELS[r.status],
-        r.gaveTyreToShop ? "Yes" : "No",
-        r.tyreReceivedAt ? String(daysSince(r.tyreReceivedAt) ?? "—") : "—",
-        r.sentToSupplierAt ? String(daysSince(r.sentToSupplierAt) ?? "—") : "—",
+        STATUS_META[r.status]?.label ?? r.status,
+        formatDate(r.tyreReceivedAt),
       ]),
       [
-        { label: "Active returns", value: String(active.length) },
-        { label: "Closed", value: String(closed.length) },
-        { label: "With us", value: String(withUs.length) },
-        { label: "With CEAT", value: String(withCEAT.length) },
-        { label: "Total value", value: `Rs ${totalValue.toLocaleString()}` },
+        { label: "Total returns",   value: String(returns.length) },
+        { label: "Total tyres",     value: String(totalQty)       },
+        { label: "Total value",     value: formatLKR(totalValue)  },
+        { label: "Active",          value: String(activeCount)    },
+        { label: "Closed",          value: String(closedCount)    },
+        { label: "Period",          value: label                  },
       ]
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-base font-medium text-gray-800">UC returns — {rangeLabel}</h2>
-        <div className="flex flex-wrap gap-2 items-center">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+        <div>
+          <h2 className="text-base font-medium text-gray-800">UC Returns — {label}</h2>
+          {!loading && (
+            <p className="text-xs text-gray-400 mt-0.5">{returns.length} returns · {totalQty} tyres</p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {canExport && !loading && displayed.length > 0 && (
             <>
               <Button size="sm" variant="secondary" onClick={handleExcelExport} className="gap-1.5">
@@ -155,67 +181,118 @@ export default function UCReturnsReport() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="text-center py-3 min-w-0"><p className="text-2xl font-semibold text-amber-700">{active.length}</p><p className="text-xs text-gray-500 mt-0.5">Active returns</p></Card>
-        <Card className="text-center py-3 min-w-0"><p className="text-2xl font-semibold text-green-700">{closed.length}</p><p className="text-xs text-gray-500 mt-0.5">Closed</p></Card>
-        <Card className="text-center py-3 min-w-0"><p className="text-2xl font-semibold text-brand-700">{withUs.length}</p><p className="text-xs text-gray-500 mt-0.5">Tyres with us</p></Card>
-        <Card className="text-center py-3 min-w-0"><p className="text-2xl font-semibold text-blue-700">{withCEAT.length}</p><p className="text-xs text-gray-500 mt-0.5">With CEAT</p></Card>
+      {/* Summary cards */}
+      {!loading && returns.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Card className="text-center">
+            <p className="text-xl font-semibold text-amber-700">{activeCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Active returns</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xl font-semibold text-green-700">{closedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Closed</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xl font-semibold text-amber-700">{withUsCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Tyres with us</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xl font-semibold text-blue-700">{withCEAT}</p>
+            <p className="text-xs text-gray-500 mt-0.5">With CEAT</p>
+          </Card>
+        </div>
+      )}
+
+      {/* Status filter — scrollable pill strip */}
+      <div className="overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-2 min-w-max pb-1">
+          {STATUS_FILTERS.map(opt => {
+            const count = opt.value === "all"
+              ? returns.length
+              : returns.filter(r => r.status === opt.value).length;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0",
+                  statusFilter === opt.value
+                    ? "bg-brand-600 text-white border-brand-600"
+                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                )}
+              >
+                {opt.label}
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                  statusFilter === opt.value
+                    ? "bg-white/20 text-white"
+                    : "bg-gray-100 text-gray-500"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {alertNotSent.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <div className="flex items-center gap-2 mb-2"><AlertTriangle className="h-4 w-4 text-amber-600" /><p className="text-sm font-medium text-amber-800">Not sent to CEAT (3+ days)</p></div>
-          {alertNotSent.map(r => <p key={r.id} className="text-xs text-amber-900 ml-6">{r.shopName} — {r.productName} · {daysSince(r.tyreReceivedAt)}d with you</p>)}
-        </Card>
-      )}
-      {alertLongCEAT.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <div className="flex items-center gap-2 mb-2"><AlertTriangle className="h-4 w-4 text-red-600" /><p className="text-sm font-medium text-red-800">With CEAT 30+ days — follow up!</p></div>
-          {alertLongCEAT.map(r => <p key={r.id} className="text-xs text-red-900 ml-6">{r.shopName} — {r.productName} · sent {daysSince(r.sentToSupplierAt)}d ago</p>)}
-        </Card>
+      {loading && (
+        <div className="flex justify-center py-8">
+          <div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
+        </div>
       )}
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {([
-          { value: "all", label: `All (${returns.length})` },
-          { value: "approved", label: `Approved (${withUs.length})` },
-          { value: "sent_to_supplier", label: `Sent CEAT (${withCEAT.length})` },
-          { value: "awaiting_replacement", label: `Awaiting (${returns.filter(r => r.status === "awaiting_replacement").length})` },
-          { value: "closed", label: `Closed (${closed.length})` },
-        ] as const).map(f => (
-          <button key={f.value} onClick={() => setFilter(f.value as any)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${filter === f.value ? "bg-brand-700 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {!loading && displayed.length === 0 && (
+        <Card className="flex flex-col items-center py-12 text-center">
+          <RotateCcw className="h-10 w-10 text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500">No returns found in this period</p>
+        </Card>
+      )}
 
-      {loading && <div className="flex justify-center py-8"><div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" /></div>}
-      {!loading && displayed.length === 0 && <Card className="py-8 text-center text-sm text-gray-400">No returns found</Card>}
-
-      <div className="space-y-2">
-        {displayed.map(r => (
-          <Card key={r.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-gray-900 truncate">{r.shopName}</p>
-                  <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABELS[r.status]}</Badge>
+      {/* Returns list */}
+      {!loading && displayed.length > 0 && (
+        <Card padding={false}>
+          {displayed.map((r, i) => {
+            const statusMeta = STATUS_META[r.status] ?? { label: r.status, badge: "default" as const };
+            return (
+              <div key={r.id}
+                className={cn(
+                  "flex items-start gap-3 px-4 py-3",
+                  i < displayed.length - 1 && "border-b border-gray-50"
+                )}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <p className="text-sm font-medium text-gray-900 truncate">{r.shopName}</p>
+                    <Badge variant={statusMeta.badge}>{statusMeta.label}</Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">{r.productName}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {REASON_LABELS[r.reason] ?? r.reason} · {r.qty} tyre{r.qty > 1 ? "s" : ""} · {formatDate(r.tyreReceivedAt)}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5 truncate">{r.qty}× {r.productName} · Rs {((r as any).totalValue ?? 0).toLocaleString()}</p>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                  <span className={cn(r.gaveTyreToShop ? "text-green-700" : "text-red-600")}>
-                    {r.gaveTyreToShop ? "✓ Replacement given" : "✗ Replacement not given"}
-                  </span>
-                  {r.tyreReceivedAt && <span>Received {daysSince(r.tyreReceivedAt)}d ago</span>}
-                  {r.sentToSupplierAt && <span>Sent CEAT {daysSince(r.sentToSupplierAt)}d ago</span>}
-                  {r.replacementReceivedAt && <span className="text-green-700">CEAT: {formatDate(r.replacementReceivedAt)}</span>}
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatLKR(r.totalValue ?? 0)}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Rs {(r.unitPrice ?? 0).toLocaleString()} each
+                  </p>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            );
+          })}
+
+          {/* Total row */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-b-2xl border-t border-gray-100">
+            <p className="text-sm font-medium text-gray-700">
+              Total ({displayed.length} returns · {displayed.reduce((s,r) => s + r.qty, 0)} tyres)
+            </p>
+            <p className="text-sm font-semibold text-gray-900">
+              {formatLKR(displayed.reduce((s, r) => s + (r.totalValue ?? 0), 0))}
+            </p>
+          </div>
+        </Card>
+      )}
     </div>
   );
-}
+}     
