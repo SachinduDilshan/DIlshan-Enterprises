@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   Timestamp,
   getDoc,
+  setDoc,
   increment,
   collection,
 } from "firebase/firestore";
@@ -24,7 +25,6 @@ import { formatLKR, calcDueDate } from "@/lib/utils";
 
 import {
   invoicesCol,
-  invoiceItemsCol,
   chequesCol,
   stockCol,
 } from "@/lib/firestore-collections";
@@ -64,52 +64,46 @@ interface LineItem {
 }
 
 
+
 /* =========================================================================
-   PAYMENT OPTIONS
+   PAYMENT OPTIONS — updated with card and pending
 =========================================================================== */
 
 const PAYMENT_OPTS: {
-  value: PaymentType;
+  value: string;
   label: string;
+  desc: string;
+  emoji: string;
 }[] = [
-  {
-    value: "cash",
-    label: "Cash",
-  },
-  {
-    value: "cheque_15d",
-    label: "Cheque — 15 days",
-  },
-  {
-    value: "cheque_30d",
-    label: "Cheque — 30 days",
-  },
-  {
-    value: "cheque_45d",
-    label: "Cheque — 45 days",
-  },
-  {
-    value: "cheque_60d",
-    label: "Cheque — 60 days",
-  },
-];
+    { value: "cash", label: "Cash", desc: "Paid immediately", emoji: "💵" },
+    { value: "card", label: "Card payment", desc: "Debit / credit card", emoji: "💳" },
+    { value: "cheque_15d", label: "Cheque — 15 days", desc: "Due in 15 days", emoji: "🏦" },
+    { value: "cheque_30d", label: "Cheque — 30 days", desc: "Due in 30 days", emoji: "🏦" },
+    { value: "cheque_45d", label: "Cheque — 45 days", desc: "Due in 45 days", emoji: "🏦" },
+    { value: "cheque_60d", label: "Cheque — 60 days", desc: "Due in 60 days", emoji: "🏦" },
+    { value: "pending", label: "Pending / Credit", desc: "Payment to be collected", emoji: "⏳" },
+  ];
+
 
 
 /* =========================================================================
    GENERATE INVOICE NUMBER
+   Format: INV-YYYYMMDD-NNNN  (e.g. INV-20260911-0042)
+   Uses Firestore counter doc to keep sequence atomic
 =========================================================================== */
 
 async function nextInvoiceNo(): Promise<string> {
-  const snap = await getDoc(
-    doc(db, "counters", "invoices")
-  );
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const dateStr = `${year}${month}${day}`;
 
-  const next =
-    (snap.exists()
-      ? snap.data().count
-      : 0) + 1;
+  const counterRef = doc(db, "counters", "invoices");
+  const snap = await getDoc(counterRef);
+  const next = (snap.exists() ? snap.data().count : 0) + 1;
 
-  return `INV-${String(next).padStart(4, "0")}`;
+  return `INV-${dateStr}-${String(next).padStart(4, "0")}`;
 }
 
 
@@ -117,41 +111,11 @@ async function nextInvoiceNo(): Promise<string> {
    TYRE NAME FONT SIZE
 =========================================================================== */
 
-/*
- * Long tyre names automatically use a smaller font.
- *
- * Short:
- *   text-sm
- *
- * Medium:
- *   text-xs
- *
- * Long:
- *   text-[11px]
- *
- * Very long:
- *   text-[10px]
- *
- * This keeps the selector compact without cutting the name.
- */
-
-function getTyreNameSize(
-  name: string
-): string {
+function getTyreNameSize(name: string): string {
   const length = name.trim().length;
-
-  if (length > 55) {
-    return "text-[9px]";
-  }
-
-  if (length > 42) {
-    return "text-[10px]";
-  }
-
-  if (length > 30) {
-    return "text-[11px]";
-  }
-
+  if (length > 55) return "text-[9px]";
+  if (length > 42) return "text-[10px]";
+  if (length > 30) return "text-[11px]";
   return "text-xs";
 }
 
@@ -166,241 +130,69 @@ interface TyreSelectProps {
   onChange: (productId: string) => void;
 }
 
-function TyreSelect({
-  value,
-  products,
-  onChange,
-}: TyreSelectProps) {
-  const [open, setOpen] =
-    useState(false);
-
-  const wrapperRef =
-    useRef<HTMLDivElement>(null);
-
-  const selectedProduct =
-    products.find(
-      (p) => p.id === value
-    ) ?? null;
-
-
-  /* -----------------------------------------------------------------------
-     Close when clicking outside
-  ----------------------------------------------------------------------- */
+function TyreSelect({ value, products, onChange }: TyreSelectProps) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const selectedProduct = products.find((p) => p.id === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
-
-    function handleOutsideClick(
-      event: MouseEvent
-    ) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(
-          event.target as Node
-        )
-      ) {
+    function handleOutsideClick(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     }
-
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [open]);
 
-
-  /* -----------------------------------------------------------------------
-     Handle product selection
-  ----------------------------------------------------------------------- */
-
-  function handleSelect(
-    productId: string
-  ) {
+  function handleSelect(productId: string) {
     onChange(productId);
     setOpen(false);
   }
 
-
   return (
-    <div
-      ref={wrapperRef}
-      className="relative min-w-0 flex-1"
-    >
-      {/* ================================================================
-          SELECTED PRODUCT BUTTON
-      ================================================================= */}
-
+    <div ref={wrapperRef} className="relative min-w-0 flex-1">
       <button
         type="button"
-        onClick={() =>
-          setOpen((previous) => !previous)
-        }
-        className="
-          flex
-          min-h-[40px]
-          w-full
-          items-center
-          justify-between
-          gap-2
-          rounded-xl
-          border
-          border-gray-200
-          bg-white
-          px-3
-          py-2
-          text-left
-          transition-colors
-          hover:border-gray-300
-          focus:border-brand-400
-          focus:outline-none
-          focus:ring-2
-          focus:ring-brand-100
-        "
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex min-h-[40px] w-full items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left transition-colors hover:border-gray-300 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        {/* Product name */}
-
-        <span
-          className={`
-            min-w-0
-            flex-1
-            break-words
-            whitespace-normal
-            font-medium
-            leading-4
-            text-brand-800
-            ${getTyreNameSize(
-              selectedProduct?.name ?? ""
-            )}
-          `}
-        >
-          {selectedProduct?.name ??
-            "Choose a tyre..."}
+        <span className={`min-w-0 flex-1 break-words whitespace-normal font-medium leading-4 text-brand-800 ${getTyreNameSize(selectedProduct?.name ?? "")}`}>
+          {selectedProduct?.name ?? "Choose a tyre..."}
         </span>
-
-
-        {/* Chevron */}
-
-        <ChevronDown
-          className={`
-            h-4
-            w-4
-            shrink-0
-            text-gray-400
-            transition-transform
-            ${open ? "rotate-180" : ""}
-          `}
-        />
+        <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-
-      {/* ================================================================
-          DROPDOWN
-      ================================================================= */}
-
       {open && (
-        <div
-          className="
-            absolute
-            left-0
-            right-0
-            top-full
-            z-[100]
-            mt-1
-            max-h-64
-            overflow-y-auto
-            overflow-x-hidden
-            rounded-xl
-            border
-            border-gray-200
-            bg-white
-            shadow-xl
-          "
-        >
-          {products.length === 0 ? (
-            <div className="px-3 py-4 text-center text-xs text-gray-400">
-              No tyres available
-            </div>
-          ) : (
-            <div className="p-1">
-              {products.map((product) => {
-                const selected =
-                  product.id === value;
-
-                return (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() =>
-                      handleSelect(product.id)
-                    }
-                    className={`
-                      flex
-                      w-full
-                      items-start
-                      gap-2
-                      rounded-lg
-                      px-3
-                      py-2.5
-                      text-left
-                      transition-colors
-                      ${
-                        selected
-                          ? "bg-brand-50"
-                          : "hover:bg-gray-50"
-                      }
-                    `}
-                  >
-                    {/* Product name */}
-
-                    <span
-                      className={`
-                        min-w-0
-                        flex-1
-                        break-words
-                        whitespace-normal
-                        leading-4
-                        ${
-                          selected
-                            ? "font-medium text-brand-800"
-                            : "text-gray-700"
-                        }
-                        ${getTyreNameSize(
-                          product.name
-                        )}
-                      `}
-                    >
-                      {product.name}
-                    </span>
-
-
-                    {/* Selected check */}
-
-                    {selected && (
-                      <Check
-                        className="
-                          mt-0.5
-                          h-4
-                          w-4
-                          shrink-0
-                          text-brand-600
-                        "
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          {products.length === 0 && (
+            <p className="px-4 py-3 text-sm text-gray-400">No products available</p>
           )}
+          {products.map((product) => (
+            <button
+              key={product.id}
+              type="button"
+              role="option"
+              aria-selected={product.id === value}
+              onClick={() => handleSelect(product.id)}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-brand-50 transition-colors border-b border-gray-50 last:border-0"
+            >
+              <div className="flex-1 min-w-0">
+                <span className={`block font-medium text-gray-900 ${getTyreNameSize(product.name)}`}>
+                  {product.name}
+                </span>
+                <span className="block text-[10px] text-gray-400 mt-0.5">
+                  {product.sku} · Rs {product.unitPrice?.toLocaleString()}
+                </span>
+              </div>
+              {product.id === value && (
+                <Check className="h-4 w-4 text-brand-600 shrink-0" />
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -409,1199 +201,500 @@ function TyreSelect({
 
 
 /* =========================================================================
-   NEW INVOICE PAGE
+   MAIN PAGE
 =========================================================================== */
 
 export default function NewInvoicePage() {
   const router = useRouter();
-
   const { appUser } = useAuth();
 
   const { shops } = useShops();
+  const { products } = useProducts({ activeOnly: true });
+  const { stock } = useStock();
 
-  const { products } = useProducts();
+  // ── Form state ────────────────────────────────────────
+  const [shopId, setShopId] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [paymentType, setPaymentType] = useState<string>("cash");
+  const [chequeNo, setChequeNo] = useState("");
+  const [bank, setBank] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
+  const isCheque = paymentType.startsWith("cheque_");
+  const isPending = paymentType === "pending";
+  const isCard = paymentType === "card";
 
-  /* -----------------------------------------------------------------------
-     State
-  ----------------------------------------------------------------------- */
+  // ── Computed values ───────────────────────────────────
+  const total = lineItems.reduce(
+    (sum, li) => sum + li.qty * li.unitPrice,
+    0
+  );
 
-  const [selectedShop, setSelectedShop] =
-    useState<Shop | null>(null);
+  const dueDate = isCheque ? calcDueDate(paymentType as PaymentType) : null;
+  const [chequeDueDate, setChequeDueDate] = useState("");
 
-  const [paymentType, setPaymentType] =
-    useState<PaymentType>("cash");
+  const selectedShop = shops.find((s) => s.id === shopId) ?? null;
 
-  const [chequeNo, setChequeNo] =
-    useState("");
-
-  const [bank, setBank] =
-    useState("");
-
-  const [lineItems, setLineItems] =
-    useState<LineItem[]>([]);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-
-  /* -----------------------------------------------------------------------
-     Stock
-  ----------------------------------------------------------------------- */
-
-  const { stock } = useStock({
-    warehouseId:
-      selectedShop?.assignedWarehouseId,
-  });
+  // ── Load invoice number on mount ──────────────────────
+  useEffect(() => {
+    nextInvoiceNo().then(setInvoiceNo);
+  }, []);
 
 
   /* -----------------------------------------------------------------------
-     Calculations
+     LINE ITEM HELPERS
   ----------------------------------------------------------------------- */
-
-  const total =
-    lineItems.reduce(
-      (sum, li) =>
-        sum +
-        li.qty *
-          li.unitPrice,
-      0
-    );
-
-  const isCheque =
-    paymentType !== "cash";
-
-  const dueDate = isCheque
-    ? calcDueDate(
-        new Date(),
-        paymentType
-      )
-    : null;
-
-
-  /* =========================================================================
-     ADD LINE ITEM
-  =========================================================================== */
 
   function addLine() {
-    if (products.length === 0) {
-      return;
-    }
-
-    const p = products[0];
-
-    setLineItems(
-      (prev) => [
-        ...prev,
-        {
-          productId: p.id,
-          productName: p.name,
-          productSku: p.sku,
-          qty: 1,
-          unitPrice: p.unitPrice,
-        },
-      ]
-    );
+    setLineItems((prev) => [
+      ...prev,
+      { productId: "", productName: "", productSku: "", qty: 1, unitPrice: 0 },
+    ]);
   }
 
-
-  /* =========================================================================
-     UPDATE LINE ITEM
-  =========================================================================== */
+  function removeLine(index: number) {
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function updateLine(
-    idx: number,
+    index: number,
     field: keyof LineItem,
     value: string | number
   ) {
-    setLineItems((prev) => {
-      const next = [...prev];
-
-      if (
-        field === "productId"
-      ) {
-        const p =
-          products.find(
-            (p) =>
-              p.id === value
-          );
-
-        if (p) {
-          next[idx] = {
-            ...next[idx],
-
-            productId:
-              p.id,
-
-            productName:
-              p.name,
-
-            productSku:
-              p.sku,
-
-            unitPrice:
-              p.unitPrice,
+    setLineItems((prev) =>
+      prev.map((li, i) => {
+        if (i !== index) return li;
+        if (field === "productId" && typeof value === "string") {
+          const product = products.find((p) => p.id === value);
+          return {
+            ...li,
+            productId: value,
+            productName: product?.name ?? "",
+            productSku: product?.sku ?? "",
+            unitPrice: product?.unitPrice ?? 0,
           };
         }
-      } else {
-        (
-          next[idx] as any
-        )[field] = value;
-      }
-
-      return next;
-    });
-  }
-
-
-  /* =========================================================================
-     REMOVE LINE
-  =========================================================================== */
-
-  function removeLine(
-    idx: number
-  ) {
-    setLineItems(
-      (prev) =>
-        prev.filter(
-          (_, i) =>
-            i !== idx
-        )
+        return { ...li, [field]: value };
+      })
     );
   }
 
-
-  /* =========================================================================
-     STOCK QUANTITY
-  =========================================================================== */
-
-  function stockQty(
-    productId: string
-  ): number {
-    const found =
-      stock.find(
-        (s) =>
-          s.productId ===
-          productId
-      );
-
-    if (!found) {
-      return 0;
-    }
-
-    const qty = found.qty;
-
-    return typeof qty === "number"
-      ? qty
-      : 0;
+  function getAvailableStock(productId: string): number {
+    const stockItem = stock.find((s) => s.productId === productId);
+    return stockItem?.qty ?? 0;
   }
 
 
-  /* =========================================================================
-     SUBMIT INVOICE
-  =========================================================================== */
+  /* -----------------------------------------------------------------------
+     SUBMIT
+  ----------------------------------------------------------------------- */
 
-  async function handleSubmit(
-    e: React.FormEvent
-  ) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
     setError("");
 
-
-    /* -----------------------------------------------------------------------
-       Validation
-    ----------------------------------------------------------------------- */
-
-    if (!selectedShop) {
-      return setError(
-        "Please select a shop."
-      );
+    // Validation
+    if (!shopId) {
+      setError("Please select a shop."); return;
     }
-
-    if (
-      lineItems.length === 0
-    ) {
-      return setError(
-        "Add at least one tyre item."
-      );
+    if (lineItems.length === 0) {
+      setError("Add at least one product."); return;
     }
-
-    if (
-      isCheque &&
-      (!chequeNo || !bank)
-    ) {
-      return setError(
-        "Enter cheque number and bank."
-      );
+    const emptyLine = lineItems.find((li) => !li.productId);
+    if (emptyLine) {
+      setError("Please select a product for each line item."); return;
     }
-
-
-    /* -----------------------------------------------------------------------
-       Validate stock
-    ----------------------------------------------------------------------- */
-
-    for (const li of lineItems) {
-      const avail =
-        stockQty(
-          li.productId
-        );
-
-      if (li.qty > avail) {
-        return setError(
-          `Insufficient stock for ${li.productName}. Available: ${avail}`
-        );
-      }
+    // cheque validation:
+    if (isCheque && (!chequeNo.trim() || !bank.trim())) {
+      setError("Please enter the cheque number and bank name."); return;
     }
-
-
-    /* -----------------------------------------------------------------------
-       Save
-    ----------------------------------------------------------------------- */
+    if (isCheque && !chequeDueDate) {
+      setError("Please select a cheque due date."); return;
+    }
+    const overStockItem = lineItems.find(
+      (li) => li.qty > getAvailableStock(li.productId)
+    );
+    if (overStockItem) {
+      setError(`Not enough stock for ${overStockItem.productName}.`); return;
+    }
 
     setSaving(true);
 
     try {
-      const invoiceNo =
-        await nextInvoiceNo();
+      // 1. Increment counter atomically
+      const counterRef = doc(db, "counters", "invoices");
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef);
+        const next = (snap.exists() ? snap.data().count : 0) + 1;
+        tx.set(counterRef, { count: next }, { merge: true });
+      });
 
-      const invoiceDate =
-        Timestamp.now();
+      // 2. Create invoice
+      const invoiceRef = await addDoc(invoicesCol, {
+        invoiceNo,
+        shopId,
+        shopName: selectedShop?.name ?? "",
+        items: lineItems.map((li) => ({
+          productId: li.productId,
+          productName: li.productName,
+          productSku: li.productSku,
+          qty: li.qty,
+          unitPrice: li.unitPrice,
+          total: li.qty * li.unitPrice,
+        })),
+        totalAmount: total,
+        paymentType,
+        status: "confirmed",
+        invoiceDate: serverTimestamp(),
+        createdBy: appUser?.uid ?? "",
+        createdAt: serverTimestamp(),
+      });
 
-
-      await runTransaction(
-        db,
-        async (tx) => {
-
-          /* ================================================================
-             1. DECREMENT STOCK
-          ================================================================ */
-
-          for (
-            const li of lineItems
-          ) {
-            const stockDocId =
-              `${selectedShop.assignedWarehouseId}_${li.productId}`;
-
-            const stockRef =
-              doc(
-                stockCol,
-                stockDocId
-              );
-
-            tx.update(
-              stockRef,
-              {
-                qty: increment(
-                  -li.qty
-                ),
-
-                updatedAt:
-                  serverTimestamp(),
-              }
-            );
+      // 3. Deduct stock for each line item
+      for (const li of lineItems) {
+        await runTransaction(db, async (tx) => {
+          const stockRef = doc(stockCol, `${li.productId}`);
+          const stockSnap = await tx.get(stockRef);
+          if (stockSnap.exists()) {
+            const current = stockSnap.data().qty ?? 0;
+            tx.update(stockRef, {
+              qty: Math.max(0, current - li.qty),
+              updatedAt: serverTimestamp(),
+            });
           }
-
-
-          /* ================================================================
-             2. INCREMENT INVOICE COUNTER
-          ================================================================ */
-
-          const counterRef =
-            doc(
-              db,
-              "counters",
-              "invoices"
-            );
-
-          tx.set(
-            counterRef,
-            {
-              count:
-                increment(1),
-            },
-            {
-              merge: true,
-            }
-          );
-
-
-          /* ================================================================
-             3. CREATE INVOICE
-          ================================================================ */
-
-          const invRef =
-            doc(invoicesCol);
-
-          tx.set(
-            invRef,
-            {
-              invoiceNo,
-
-              notes: "",
-
-              shopId:
-                selectedShop.id,
-
-              shopName:
-                selectedShop.name,
-
-              warehouseId:
-                selectedShop.assignedWarehouseId,
-
-              warehouseName:
-                selectedShop
-                  .assignedWarehouseId ===
-                "polonnaruwa"
-                  ? "Polonnaruwa"
-                  : "Anuradhapura",
-
-              createdBy:
-                appUser!.uid,
-
-              paymentType,
-
-              totalAmount:
-                total,
-
-              status:
-                "confirmed",
-
-              invoiceDate,
-
-              createdAt:
-                serverTimestamp(),
-
-              updatedAt:
-                serverTimestamp(),
-
-              id: "",
-            }
-          );
-
-
-          /* ================================================================
-             4. SHOP OUTSTANDING BALANCE
-          ================================================================ */
-
-          const shopRef =
-            doc(
-              db,
-              "shops",
-              selectedShop.id
-            );
-
-          tx.update(
-            shopRef,
-            {
-              outstandingBalance:
-                increment(
-                  isCheque
-                    ? total
-                    : 0
-                ),
-
-              updatedAt:
-                serverTimestamp(),
-            }
-          );
-
-
-          /* ================================================================
-             5. CHEQUE
-          ================================================================ */
-
-          if (
-            isCheque &&
-            dueDate
-          ) {
-            const chequeRef =
-              doc(chequesCol);
-
-            tx.set(
-              chequeRef,
-              {
-                invoiceId:
-                  invRef.id,
-
-                invoiceNo,
-
-                shopId:
-                  selectedShop.id,
-
-                shopName:
-                  selectedShop.name,
-
-                chequeNo,
-
-                bank,
-
-                amount:
-                  total,
-
-                dueDate:
-                  Timestamp.fromDate(
-                    dueDate
-                  ),
-
-                status:
-                  "pending",
-
-                createdAt:
-                  serverTimestamp(),
-
-                updatedAt:
-                  serverTimestamp(),
-
-                id: "",
-              }
-            );
-          }
-
-          return invRef.id;
-        }
-      );
-
-
-      /* ---------------------------------------------------------------------
-         Write invoice items
-      --------------------------------------------------------------------- */
-
-      const {
-        getDocs: gd,
-        query: q,
-        where: wh,
-      } = await import(
-        "firebase/firestore"
-      );
-
-      const snap =
-        await gd(
-          q(
-            invoicesCol,
-            wh(
-              "invoiceNo",
-              "==",
-              invoiceNo
-            )
-          )
-        );
-
-
-      if (!snap.empty) {
-        const invId =
-          snap.docs[0].id;
-
-        const itemsCol =
-          invoiceItemsCol(
-            invId
-          );
-
-        for (
-          const li of lineItems
-        ) {
-          await addDoc(
-            itemsCol,
-            {
-              invoiceId:
-                invId,
-
-              productId:
-                li.productId,
-
-              productName:
-                li.productName,
-
-              productSku:
-                li.productSku,
-
-              qty:
-                li.qty,
-
-              unitPrice:
-                li.unitPrice,
-
-              lineTotal:
-                li.qty *
-                li.unitPrice,
-
-              id: "",
-            }
-          );
-        }
+        });
       }
 
+      // 4. Create cheque record if cheque payment
+      if (isCheque && chequeDueDate) {
+        const due = new Date(chequeDueDate);
+        due.setHours(23, 59, 59, 999);
 
-      /* ---------------------------------------------------------------------
-         Redirect
-      --------------------------------------------------------------------- */
+        const chequeRef = doc(chequesCol);
+        await setDoc(chequeRef, {
+          id: chequeRef.id,
+          shopId,
+          shopName: selectedShop?.name ?? "",
+          invoiceId: invoiceRef.id,
+          invoiceNo,
+          chequeNo: chequeNo.trim(),
+          bank: bank.trim(),
+          amount: total,
+          dueDate: Timestamp.fromDate(due),
+          status: "pending",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
 
-      router.push(
-        "/dashboard/invoices"
-      );
+      // 5. For pending — add to shop outstanding balance
+      if (isPending) {
+        try {
+          await runTransaction(db, async (tx) => {
+            const shopRef = doc(db, "shops", shopId);
+            const shopSnap = await tx.get(shopRef);
+            if (shopSnap.exists()) {
+              tx.update(shopRef, {
+                outstandingBalance: increment(total),
+                updatedAt: serverTimestamp(),
+              });
+            }
+          });
+        } catch { }
+      }
 
+      router.push(`/dashboard/invoices/${invoiceRef.id}`);
     } catch (err: any) {
-      setError(
-        err.message ??
-          "Failed to create invoice."
-      );
-
+      setError(err.message);
       setSaving(false);
     }
   }
 
 
-  /* =========================================================================
-     UI
-  =========================================================================== */
+  /* -----------------------------------------------------------------------
+     RENDER
+  ----------------------------------------------------------------------- */
+
+  const shopOptions = [
+    { value: "", label: "Select a shop..." },
+    ...shops.map((s) => ({ value: s.id, label: s.name })),
+  ];
 
   return (
-    <div
-      className="
-        mx-auto
-        w-full
-        max-w-lg
-        p-4
-        pb-24
-        md:p-6
-      "
-    >
+    <div className="mx-auto max-w-lg space-y-4 p-4 pb-20 md:p-6">
 
-      {/* =====================================================================
-          PAGE HEADER
-      ======================================================================= */}
-
-      <div
-        className="
-          mb-5
-          flex
-          items-center
-          gap-3
-        "
-      >
+      {/* ── Header ── */}
+      <div className="flex items-center gap-3">
         <Link href="/dashboard/invoices">
           <button
             type="button"
-            className="
-              flex
-              h-8
-              w-8
-              items-center
-              justify-center
-              rounded-lg
-              border
-              border-gray-200
-              transition-colors
-              hover:bg-gray-50
-              active:bg-gray-100
-            "
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"
           >
-            <ArrowLeft
-              className="
-                h-4
-                w-4
-                text-gray-500
-              "
-            />
+            <ArrowLeft className="h-4 w-4 text-gray-500" />
           </button>
         </Link>
-
-        <div className="min-w-0">
-          <h1
-            className="
-              text-xl
-              font-medium
-              text-gray-900
-            "
-          >
-            New invoice
-          </h1>
-
-          <p
-            className="
-              text-xs
-              text-gray-400
-            "
-          >
-            Auto-assigned number on save
-          </p>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-medium text-gray-900">New invoice</h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-gray-400">Invoice no:</span>
+            <span className="text-xs font-mono font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md">
+              {invoiceNo || "Generating..."}
+            </span>
+          </div>
         </div>
       </div>
 
+      <form onSubmit={handleSubmit} className="space-y-4">
 
-      {/* =====================================================================
-          FORM
-      ======================================================================= */}
-
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4"
-      >
-
-        {/* ===================================================================
-            SHOP SELECTION
-        ===================================================================== */}
-
+        {/* ── Shop ── */}
         <Card>
           <CardHeader title="Shop" />
-
           <Select
-            label="Select shop *"
-            value={
-              selectedShop?.id ??
-              ""
-            }
-            onChange={(e) =>
-              setSelectedShop(
-                shops.find(
-                  (s) =>
-                    s.id ===
-                    e.target.value
-                ) ?? null
-              )
-            }
-            placeholder="Choose a shop..."
-            options={shops.map(
-              (s) => ({
-                value: s.id,
-                label: `${s.name} — ${s.city}`,
-              })
-            )}
+            value={shopId}
+            onChange={(e) => setShopId(e.target.value)}
+            options={shopOptions}
+            placeholder="Select a shop..."
           />
-
-          {selectedShop && (
-            <div
-              className="
-                mt-3
-                space-y-1
-                rounded-xl
-                bg-gray-50
-                px-3
-                py-2.5
-                text-xs
-                text-gray-600
-              "
-            >
-              <div className="flex justify-between gap-3">
-                <span>
-                  Owner
-                </span>
-
-                <span className="text-right font-medium">
-                  {
-                    selectedShop.ownerName
-                  }
-                </span>
-              </div>
-
-              <div className="flex justify-between gap-3">
-                <span>
-                  Warehouse
-                </span>
-
-                <span className="font-medium capitalize">
-                  {
-                    selectedShop.assignedWarehouseId ===
-                    "polonnaruwa"
-                      ? "Polonnaruwa"
-                      : "Anuradhapura"
-                  }
-                </span>
-              </div>
-
-              {selectedShop.outstandingBalance >
-                0 && (
-                <div className="flex justify-between gap-3">
-                  <span>
-                    Outstanding
-                  </span>
-
-                  <span className="font-medium text-red-600">
-                    {formatLKR(
-                      selectedShop.outstandingBalance
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
         </Card>
 
 
-        {/* ===================================================================
-            TYRE ITEMS
-        ===================================================================== */}
-
+        {/* ── Line items ── */}
         <Card>
-          <CardHeader
-            title="Tyre items"
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                type="button"
-                onClick={addLine}
-              >
-                <Plus className="h-4 w-4" />
-                Add
-              </Button>
-            }
-          />
-
-          {lineItems.length ===
-            0 && (
-            <div
-              className="
-                py-6
-                text-center
-                text-sm
-                text-gray-400
-              "
+          <div className="mb-3 flex items-center justify-between">
+            <CardHeader title="Products" />
+            <button
+              type="button"
+              onClick={addLine}
+              className="flex items-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-3 py-2 transition-colors"
             >
-              No items yet — tap
-              {" "}
-              "Add"
-              {" "}
-              to begin
-            </div>
-          )}
-
-
-          <div className="space-y-3">
-
-            {lineItems.map(
-              (li, idx) => {
-                const avail =
-                  stockQty(
-                    li.productId
-                  );
-
-                const overStock =
-                  li.qty >
-                  avail;
-
-                return (
-                  <div
-                    key={idx}
-                    className="
-                      space-y-2
-                      rounded-xl
-                      border
-                      border-gray-100
-                      p-3
-                    "
-                  >
-
-                    {/* ======================================================
-                        TYRE SELECTOR
-                    ====================================================== */}
-
-                    <div
-                      className="
-                        flex
-                        items-start
-                        gap-2
-                      "
-                    >
-                      <TyreSelect
-                        value={
-                          li.productId
-                        }
-                        products={
-                          products
-                        }
-                        onChange={(
-                          productId
-                        ) =>
-                          updateLine(
-                            idx,
-                            "productId",
-                            productId
-                          )
-                        }
-                      />
-
-                      {/* Delete */}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeLine(
-                            idx
-                          )
-                        }
-                        className="
-                          mt-2
-                          shrink-0
-                          text-gray-300
-                          transition-colors
-                          hover:text-red-500
-                          active:text-red-600
-                        "
-                        aria-label="Remove tyre"
-                      >
-                        <Trash2
-                          className="
-                            h-4
-                            w-4
-                          "
-                        />
-                      </button>
-                    </div>
-
-
-                    {/* ======================================================
-                        QTY + UNIT PRICE
-                    ====================================================== */}
-
-                    <div
-                      className="
-                        flex
-                        items-center
-                        gap-2
-                      "
-                    >
-
-                      {/* Quantity */}
-
-                      <div className="min-w-0 flex-1">
-                        <label
-                          className="
-                            text-xs
-                            text-gray-500
-                          "
-                        >
-                          Qty
-                        </label>
-
-                        <input
-                          type="number"
-                          min={1}
-                          max={avail}
-                          value={
-                            li.qty
-                          }
-                          onChange={(e) =>
-                            updateLine(
-                              idx,
-                              "qty",
-                              Math.max(
-                                1,
-                                parseInt(
-                                  e.target
-                                    .value
-                                ) || 1
-                              )
-                            )
-                          }
-                          className="
-                            w-full
-                            rounded-xl
-                            border
-                            border-gray-200
-                            px-3
-                            py-2
-                            text-sm
-                            focus:border-brand-400
-                            focus:outline-none
-                          "
-                        />
-                      </div>
-
-
-                      {/* Unit price */}
-
-                      <div className="min-w-0 flex-1">
-                        <label
-                          className="
-                            text-xs
-                            text-gray-500
-                          "
-                        >
-                          Unit price (Rs)
-                        </label>
-
-                        <input
-                          type="number"
-                          min={1}
-                          value={
-                            li.unitPrice
-                          }
-                          onChange={(e) =>
-                            updateLine(
-                              idx,
-                              "unitPrice",
-                              parseFloat(
-                                e.target
-                                  .value
-                              ) || 0
-                            )
-                          }
-                          className="
-                            w-full
-                            rounded-xl
-                            border
-                            border-gray-200
-                            px-3
-                            py-2
-                            text-sm
-                            focus:border-brand-400
-                            focus:outline-none
-                          "
-                        />
-                      </div>
-                    </div>
-
-
-                    {/* ======================================================
-                        STOCK + SUBTOTAL
-                    ====================================================== */}
-
-                    <div
-                      className="
-                        flex
-                        items-center
-                        justify-between
-                        gap-2
-                        text-xs
-                      "
-                    >
-                      <span
-                        className={
-                          overStock
-                            ? "font-medium text-red-600"
-                            : "text-gray-400"
-                        }
-                      >
-                        Stock:{" "}
-                        {avail}{" "}
-                        available
-                      </span>
-
-                      <span className="shrink-0 font-medium text-gray-700">
-                        Subtotal:{" "}
-                        {formatLKR(
-                          li.qty *
-                            li.unitPrice
-                        )}
-                      </span>
-                    </div>
-
-
-                    {/* ======================================================
-                        STOCK ERROR
-                    ====================================================== */}
-
-                    {overStock && (
-                      <p
-                        className="
-                          text-xs
-                          text-red-600
-                        "
-                      >
-                        ⚠ Qty exceeds
-                        available stock
-                      </p>
-                    )}
-                  </div>
-                );
-              }
-            )}
+              <Plus className="h-3.5 w-3.5" />
+              Add line
+            </button>
           </div>
 
-
-          {/* =================================================================
-              TOTAL
-          =================================================================== */}
-
-          {lineItems.length >
-            0 && (
-            <div
-              className="
-                mt-4
-                flex
-                items-center
-                justify-between
-                border-t
-                border-gray-100
-                pt-3
-              "
+          {lineItems.length === 0 && (
+            <button
+              type="button"
+              onClick={addLine}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 hover:border-brand-300 py-6 text-sm text-gray-400 hover:text-brand-600 transition-colors"
             >
-              <span className="text-sm text-gray-500">
-                Total
-              </span>
+              <Plus className="h-4 w-4" />
+              Add first product
+            </button>
+          )}
 
-              <span
-                className="
-                  text-xl
-                  font-medium
-                  text-gray-900
-                "
-              >
-                {formatLKR(total)}
-              </span>
+          <div className="space-y-3">
+            {lineItems.map((li, idx) => {
+              const avail = getAvailableStock(li.productId);
+              const overStock = li.productId !== "" && li.qty > avail;
+
+              return (
+                <div
+                  key={idx}
+                  className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3"
+                >
+                  {/* Product selector + remove */}
+                  <div className="flex items-start gap-2">
+                    <TyreSelect
+                      value={li.productId}
+                      products={products}
+                      onChange={(id) => updateLine(idx, "productId", id)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLine(idx)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4 text-gray-400" />
+                    </button>
+                  </div>
+
+                  {/* Qty + unit price */}
+                  <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                      <label className="text-xs text-gray-500">Qty</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={li.qty}
+                        onChange={(e) =>
+                          updateLine(idx, "qty", Math.max(1, parseInt(e.target.value) || 1))
+                        }
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <label className="text-xs text-gray-500">Unit price (Rs)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={li.unitPrice}
+                        onChange={(e) =>
+                          updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)
+                        }
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stock + subtotal */}
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className={overStock ? "font-medium text-red-600" : "text-gray-400"}>
+                      Stock: {avail} available
+                    </span>
+                    <span className="shrink-0 font-medium text-gray-700">
+                      Subtotal: {formatLKR(li.qty * li.unitPrice)}
+                    </span>
+                  </div>
+
+                  {overStock && (
+                    <p className="text-xs text-red-600">
+                      ⚠ Qty exceeds available stock
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {lineItems.length > 0 && (
+            <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
+              <span className="text-sm text-gray-500">Total</span>
+              <span className="text-xl font-medium text-gray-900">{formatLKR(total)}</span>
             </div>
           )}
         </Card>
 
 
-        {/* ===================================================================
-            PAYMENT
-        ===================================================================== */}
-
+        {/* ── Payment method ── */}
         <Card>
           <CardHeader title="Payment method" />
 
-          <div
-            className="
-              grid
-              grid-cols-2
-              gap-2
-              sm:grid-cols-3
-            "
-          >
-            {PAYMENT_OPTS.map(
-              (opt) => (
-                <button
-                  key={
-                    opt.value
-                  }
-                  type="button"
-                  onClick={() =>
-                    setPaymentType(
-                      opt.value
-                    )
-                  }
-                  className={`
-                    rounded-xl
-                    border
-                    px-3
-                    py-2.5
-                    text-sm
-                    font-medium
-                    transition-colors
-                    ${
-                      paymentType ===
-                      opt.value
-                        ? "border-brand-400 bg-brand-50 text-brand-800"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }
-                  `}
-                >
-                  {opt.label}
-                </button>
-              )
-            )}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {PAYMENT_OPTS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setPaymentType(opt.value)}
+                className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition-colors ${paymentType === opt.value
+                  ? "border-brand-400 bg-brand-50 text-brand-800"
+                  : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
+                  }`}
+              >
+                <span className="text-base mb-0.5">{opt.emoji}</span>
+                <span className="text-xs font-medium leading-tight">{opt.label}</span>
+                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{opt.desc}</span>
+              </button>
+            ))}
           </div>
 
-
-          {/* =================================================================
-              CHEQUE DETAILS
-          =================================================================== */}
-
+          {/* Cheque details */}
           {isCheque && (
-            <div
-              className="
-                mt-4
-                space-y-3
-                border-t
-                border-gray-100
-                pt-4
-              "
-            >
+            <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
               <Input
                 label="Cheque number *"
                 placeholder="e.g. 001234"
                 value={chequeNo}
-                onChange={(e) =>
-                  setChequeNo(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setChequeNo(e.target.value)}
               />
-
               <Input
                 label="Bank *"
                 placeholder="e.g. Commercial Bank"
                 value={bank}
-                onChange={(e) =>
-                  setBank(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setBank(e.target.value)}
               />
+              {/* Custom due date picker */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  Cheque due date *
+                </label>
+                <input
+                  type="date"
+                  value={chequeDueDate}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={e => setChequeDueDate(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
+                />
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[
+                    { label: "15 days", days: 15 },
+                    { label: "30 days", days: 30 },
+                    { label: "45 days", days: 45 },
+                    { label: "60 days", days: 60 },
+                    { label: "90 days", days: 90 },
+                  ].map(opt => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + opt.days);
+                    const val = d.toISOString().split("T")[0];
+                    return (
+                      <button
+                        key={opt.days}
+                        type="button"
+                        onClick={() => setChequeDueDate(val)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${chequeDueDate === val
+                          ? "border-brand-400 bg-brand-50 text-brand-700"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                          }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {dueDate && (
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    gap-3
-                    rounded-xl
-                    bg-amber-50
-                    px-4
-                    py-3
-                  "
-                >
-                  <span className="text-sm text-amber-800">
-                    Due date
-                  </span>
-
-                  <span className="text-right text-sm font-medium text-amber-900">
-                    {dueDate.toLocaleDateString(
-                      "en-LK",
-                      {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      }
-                    )}
+              {chequeDueDate && (
+                <div className="flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+                  <span className="text-sm text-amber-800">Due date</span>
+                  <span className="text-sm font-semibold text-amber-900">
+                    {new Date(chequeDueDate).toLocaleDateString("en-LK", {
+                      day: "numeric", month: "long", year: "numeric",
+                    })}
                   </span>
                 </div>
               )}
             </div>
           )}
+
+          {/* Pending notice */}
+          {isPending && (
+            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <p className="text-xs text-amber-800">
+                ⏳ This invoice will be added to the shop's outstanding balance. Collect payment later.
+              </p>
+            </div>
+          )}
+
+          {/* Card notice */}
+          {isCard && (
+            <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
+              <p className="text-xs text-blue-800">
+                💳 Card payment — confirm the transaction has been processed on the terminal.
+              </p>
+            </div>
+          )}
         </Card>
 
 
-        {/* ===================================================================
-            ERROR
-        ===================================================================== */}
-
+        {/* ── Error ── */}
         {error && (
-          <div
-            className="
-              rounded-xl
-              border
-              border-red-200
-              bg-red-50
-              px-4
-              py-3
-              text-sm
-              text-red-700
-            "
-          >
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
 
-        {/* ===================================================================
-            SUBMIT
-        ===================================================================== */}
-
+        {/* ── Submit ── */}
         <Button
           type="submit"
           size="lg"
           loading={saving}
           className="w-full"
         >
-          Confirm invoice ·{" "}
-          {formatLKR(total)}
+          Confirm invoice · {formatLKR(total)}
         </Button>
 
       </form>

@@ -35,8 +35,16 @@ const PAYMENT_DAYS: Record<PaymentType, number> = {
 };
 
 /** Calculate cheque due date from invoice date */
-export function calcDueDate(invoiceDate: Date, paymentType: PaymentType): Date {
-  return addDays(invoiceDate, PAYMENT_DAYS[paymentType]);
+export function calcDueDate(paymentType: string, customDate?: Date): Date | null {
+  if (!paymentType.startsWith("cheque_")) return null;
+  // If user provided a custom date, use it directly
+  if (customDate) return customDate;
+  // Otherwise calculate from days
+  const days = parseInt(paymentType.replace("cheque_", "").replace("d", ""));
+  if (isNaN(days)) return null;
+  const due = new Date();
+  due.setDate(due.getDate() + days);
+  return due;
 }
 
 /** Human-friendly payment type label */

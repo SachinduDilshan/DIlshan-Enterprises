@@ -8,6 +8,7 @@ import {
   Package,
   RotateCcw,
   CalendarClock,
+  CreditCard,
 } from "lucide-react";
 
 import ChequesReport from "@/components/reports/ChequesReport";
@@ -15,6 +16,7 @@ import StockMovementReport from "@/components/reports/StockMovementReport";
 import UCReturnsReport from "@/components/reports/UCReturnsReport";
 import ShopSalesReport from "@/components/reports/ShopSalesReport";
 import SalesReport from "@/components/reports/SalesReport";
+import PaymentsReport from "@/components/reports/PaymentsReport";
 
 const TABS = [
   {
@@ -33,6 +35,11 @@ const TABS = [
     icon: CalendarClock,
   },
   {
+    key: "payments",
+    label: "Payments",
+    icon: CreditCard,
+  },
+  {
     key: "stock",
     label: "Stock",
     icon: Package,
@@ -43,6 +50,8 @@ const TABS = [
     icon: RotateCcw,
   },
 ] as const;
+
+
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -129,6 +138,8 @@ export default function ReportsPage() {
         {tab === "shop" && <ShopSalesReport />}
 
         {tab === "cheques" && <ChequesReport />}
+
+        {tab === "payments" && <PaymentsReport />}
 
         {tab === "stock" && <StockMovementReport />}
 
