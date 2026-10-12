@@ -63,6 +63,7 @@ interface LineItem {
   unitPrice: number;
 }
 
+type InvoicePaymentType = PaymentType | "card" | "pending";
 
 
 /* =========================================================================
@@ -70,7 +71,7 @@ interface LineItem {
 =========================================================================== */
 
 const PAYMENT_OPTS: {
-  value: string;
+  value: InvoicePaymentType;
   label: string;
   desc: string;
   emoji: string;
@@ -209,13 +210,13 @@ export default function NewInvoicePage() {
   const { appUser } = useAuth();
 
   const { shops } = useShops();
-  const { products } = useProducts({ activeOnly: true });
+  const { products } = useProducts();
   const { stock } = useStock();
 
   // ── Form state ────────────────────────────────────────
   const [shopId, setShopId] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [paymentType, setPaymentType] = useState<string>("cash");
+  const [paymentType, setPaymentType] = useState<InvoicePaymentType>("cash");
   const [chequeNo, setChequeNo] = useState("");
   const [bank, setBank] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -332,7 +333,7 @@ export default function NewInvoicePage() {
       });
 
       // 2. Create invoice
-      const invoiceRef = await addDoc(invoicesCol, {
+      const invoiceData = {
         invoiceNo,
         shopId,
         shopName: selectedShop?.name ?? "",
@@ -345,12 +346,14 @@ export default function NewInvoicePage() {
           total: li.qty * li.unitPrice,
         })),
         totalAmount: total,
-        paymentType,
+        paymentType: paymentType as PaymentType,
         status: "confirmed",
         invoiceDate: serverTimestamp(),
         createdBy: appUser?.uid ?? "",
         createdAt: serverTimestamp(),
-      });
+      } as any;
+
+      const invoiceRef = await addDoc(invoicesCol, invoiceData);
 
       // 3. Deduct stock for each line item
       for (const li of lineItems) {

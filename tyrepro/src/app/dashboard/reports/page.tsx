@@ -11,7 +11,6 @@ import {
   CreditCard,
 } from "lucide-react";
 
-import ChequesReport from "@/components/reports/ChequesReport";
 import StockMovementReport from "@/components/reports/StockMovementReport";
 import UCReturnsReport from "@/components/reports/UCReturnsReport";
 import ShopSalesReport from "@/components/reports/ShopSalesReport";
@@ -28,11 +27,6 @@ const TABS = [
     key: "shop",
     label: "Shop-wise",
     icon: FileText,
-  },
-  {
-    key: "cheques",
-    label: "Cheques",
-    icon: CalendarClock,
   },
   {
     key: "payments",
@@ -136,8 +130,6 @@ export default function ReportsPage() {
         {tab === "daily" && <SalesReport />}
 
         {tab === "shop" && <ShopSalesReport />}
-
-        {tab === "cheques" && <ChequesReport />}
 
         {tab === "payments" && <PaymentsReport />}
 
