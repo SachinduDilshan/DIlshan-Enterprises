@@ -8,10 +8,8 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import {
-  FileSpreadsheet, Download, CreditCard,
-  Banknote, Clock, CalendarClock,
+  FileSpreadsheet, Download, CreditCard, CalendarClock,
 } from "lucide-react";
 import { PeriodSelector, getDateRange } from "@/components/reports/PeriodSelector";
 import { exportToExcel, exportToPDF } from "@/lib/exportUtils";
@@ -21,117 +19,111 @@ import { cn } from "@/lib/utils";
 // ── Types ─────────────────────────────────────────────────
 
 interface Invoice {
-  id:          string;
-  invoiceNo:   string;
-  shopName:    string;
+  id: string;
+  invoiceNo: string;
+  shopName: string;
   totalAmount: number;
   paymentType: string;
-  status:      string;
+  status: string;
   invoiceDate: any;
 }
 
 interface Cheque {
-  id:           string;
-  invoiceNo:    string;
-  shopName:     string;
-  bank:         string;
-  chequeNo:     string;
-  amount:       number;
-  dueDate:      any;
+  id: string;
+  invoiceNo: string;
+  shopName: string;
+  bank: string;
+  chequeNo: string;
+  amount: number;
+  dueDate: any;
   depositedAt?: any;
-  status:       string;
+  status: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash:       "Cash",
-  card:       "Card",
+  cash: "Cash",
+  card: "Card",
   cheque_15d: "Cheque (15d)",
   cheque_30d: "Cheque (30d)",
   cheque_45d: "Cheque (45d)",
   cheque_60d: "Cheque (60d)",
   cheque_90d: "Cheque (90d)",
-  pending:    "Pending",
+  pending: "Pending",
 };
 
-function paymentBadge(type: string): "success"|"info"|"warning"|"default" {
-  if (type === "cash")    return "success";
-  if (type === "card")    return "info";
+function paymentBadge(type: string): "success" | "info" | "warning" | "default" {
+  if (type === "cash") return "success";
+  if (type === "card") return "info";
   if (type === "pending") return "warning";
   return "default";
 }
 
+// FIX: handles both Firestore Timestamp and plain date strings
 function toDate(val: any): Date | null {
   if (!val) return null;
-  if (val?.toDate) return val.toDate();
-  if (val instanceof Date) return val;
-  return new Date(val);
+  // Firestore Timestamp
+  if (typeof val?.toDate === "function") return val.toDate();
+  // Already a Date
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  // ISO string or number
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-// ── Tab config ────────────────────────────────────────────
+// ── Tab types ─────────────────────────────────────────────
 
 type MainTab = "invoices" | "cheques";
 type InvoiceFilter = "all" | "cash" | "card" | "cheque" | "pending";
-type ChequeFilter  = "all" | "pending" | "overdue" | "deposited";
+type ChequeFilter = "all" | "pending" | "overdue" | "deposited";
 
 // ── Main component ────────────────────────────────────────
 
 export default function PaymentsReport() {
-  const { appUser }                   = useAuth();
-  const [range, setRange]             = useState("month");
-  const [customFrom, setCustomFrom]   = useState("");
-  const [customTo, setCustomTo]       = useState("");
-  const [invoices, setInvoices]       = useState<Invoice[]>([]);
-  const [cheques, setCheques]         = useState<Cheque[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [mainTab, setMainTab]         = useState<MainTab>("invoices");
-  const [invFilter, setInvFilter]     = useState<InvoiceFilter>("all");
-  const [cheqFilter, setCheqFilter]   = useState<ChequeFilter>("all");
+  const { appUser } = useAuth();
+  const [range, setRange] = useState("month");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  // Raw data — loaded once without date filter
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [allCheques, setAllCheques] = useState<Cheque[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [mainTab, setMainTab] = useState<MainTab>("invoices");
+  const [invFilter, setInvFilter] = useState<InvoiceFilter>("all");
+  const [cheqFilter, setCheqFilter] = useState<ChequeFilter>("all");
 
   const canExport = appUser?.role === "admin" || appUser?.role === "sales_rep";
-  const { start, end, label } = getDateRange(range, customFrom, customTo);
 
-  // ── Load data ─────────────────────────────────────────
+  // ── Load ALL data once on mount ───────────────────────
+  // We do NOT filter in Firestore to avoid composite index requirements.
+  // All date filtering happens client-side below.
 
   useEffect(() => {
-    if (range === "custom" && (!customFrom || !customTo)) {
-      setLoading(false); setInvoices([]); setCheques([]); return;
-    }
     let cancelled = false;
     setLoading(true);
 
     async function load() {
       try {
-        // Load invoices
-        const invSnap = await getDocs(query(
-          collection(db, "invoices"), orderBy("invoiceDate", "desc")
-        ));
-        const allInv = invSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))
-          .filter(inv => inv.status === "confirmed")
-          .filter(inv => {
-            if (range === "alltime") return true;
-            const d = toDate(inv.invoiceDate);
-            return d && d >= start && d <= end;
-          });
-
-        // Load cheques
-        const cheqSnap = await getDocs(query(
-          collection(db, "cheques"), orderBy("dueDate", "asc")
-        ));
-        const allCheq = cheqSnap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque))
-          .filter(c => {
-            if (range === "alltime") return true;
-            const d = toDate(c.dueDate);
-            return d && d >= start && d <= end;
-          });
+        const [invSnap, cheqSnap] = await Promise.all([
+          getDocs(query(collection(db, "invoices"), orderBy("invoiceDate", "desc"))),
+          getDocs(query(collection(db, "cheques"), orderBy("dueDate", "asc"))),
+        ]);
 
         if (!cancelled) {
-          setInvoices(allInv);
-          setCheques(allCheq);
+          setAllInvoices(
+            invSnap.docs
+              .map(d => ({ id: d.id, ...d.data() } as Invoice))
+              .filter(inv => inv.status === "confirmed")
+          );
+          setAllCheques(
+            cheqSnap.docs.map(d => ({ id: d.id, ...d.data() } as Cheque))
+          );
         }
       } catch (err) {
-        console.error("PaymentsReport error:", err);
+        console.error("PaymentsReport load error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -139,75 +131,103 @@ export default function PaymentsReport() {
 
     load();
     return () => { cancelled = true; };
-  }, [range, customFrom, customTo]);
+  }, []); // load only once — filtering is done below
 
-  // ── Computed values ───────────────────────────────────
+  // ── Client-side date filtering ────────────────────────
 
-  const cashInv    = invoices.filter(i => i.paymentType === "cash");
-  const cardInv    = invoices.filter(i => i.paymentType === "card");
-  const chequeInv  = invoices.filter(i => i.paymentType.startsWith("cheque_"));
+  // Compute range boundaries fresh every render
+  const { start, end, label } = getDateRange(range, customFrom, customTo);
+
+  const isCustomIncomplete = range === "custom" && (!customFrom || !customTo);
+
+  function inRange(val: any): boolean {
+    if (isCustomIncomplete) return false;
+    if (range === "alltime") return true;
+    const d = toDate(val);
+    if (!d) return false;
+    return d >= start && d <= end;
+  }
+
+  const invoices = allInvoices.filter(inv => inRange(inv.invoiceDate));
+  const cheques = allCheques.filter(c => inRange(c.dueDate));
+
+  // ── Computed invoice groups ───────────────────────────
+
+  const cashInv = invoices.filter(i => i.paymentType === "cash");
+  const cardInv = invoices.filter(i => i.paymentType === "card");
+  const chequeInv = invoices.filter(i => i.paymentType.startsWith("cheque_"));
   const pendingInv = invoices.filter(i => i.paymentType === "pending");
 
-  const cashTotal    = cashInv.reduce((s, i) => s + i.totalAmount, 0);
-  const cardTotal    = cardInv.reduce((s, i) => s + i.totalAmount, 0);
-  const chequeTotal  = chequeInv.reduce((s, i) => s + i.totalAmount, 0);
+  const cashTotal = cashInv.reduce((s, i) => s + i.totalAmount, 0);
+  const cardTotal = cardInv.reduce((s, i) => s + i.totalAmount, 0);
+  const chequeTotal = chequeInv.reduce((s, i) => s + i.totalAmount, 0);
   const pendingTotal = pendingInv.reduce((s, i) => s + i.totalAmount, 0);
-  const grandTotal   = invoices.reduce((s, i) => s + i.totalAmount, 0);
+  const grandTotal = invoices.reduce((s, i) => s + i.totalAmount, 0);
+
+  // ── Computed cheque groups ────────────────────────────
 
   const now = new Date();
-  const pendingCheques  = cheques.filter(c => c.status === "pending" && (toDate(c.dueDate) ?? now) >= now);
-  const overdueCheques  = cheques.filter(c => c.status === "pending" && (toDate(c.dueDate) ?? now) < now);
+
+  const pendingCheques = cheques.filter(c =>
+    c.status === "pending" && (toDate(c.dueDate) ?? now) >= now
+  );
+  const overdueCheques = cheques.filter(c =>
+    c.status === "pending" && (toDate(c.dueDate) ?? now) < now
+  );
   const depositedCheques = cheques.filter(c => c.status === "deposited");
 
-  // Displayed invoices
-  const displayedInv = invFilter === "all"     ? invoices
-    : invFilter === "cash"    ? cashInv
-    : invFilter === "card"    ? cardInv
-    : invFilter === "cheque"  ? chequeInv
-    : pendingInv;
+  // ── Displayed rows based on filters ──────────────────
 
-  // Displayed cheques
-  const displayedCheq = cheqFilter === "all"       ? cheques
-    : cheqFilter === "pending"   ? pendingCheques
-    : cheqFilter === "overdue"   ? overdueCheques
-    : depositedCheques;
+  const displayedInv: Invoice[] =
+    invFilter === "all" ? invoices
+      : invFilter === "cash" ? cashInv
+        : invFilter === "card" ? cardInv
+          : invFilter === "cheque" ? chequeInv
+            : pendingInv;
 
-  // ── Export functions ──────────────────────────────────
+  const displayedCheq: Cheque[] =
+    cheqFilter === "all" ? cheques
+      : cheqFilter === "pending" ? pendingCheques
+        : cheqFilter === "overdue" ? overdueCheques
+          : depositedCheques;
 
-  function exportInvoices(subset: Invoice[], name: string) {
+  // ── Export helpers ────────────────────────────────────
+
+  function exportInvoicesXlsx(subset: Invoice[], name: string) {
     exportToExcel(
       subset.map(inv => ({
-        "Invoice No":   inv.invoiceNo,
-        "Shop":         inv.shopName,
-        "Date":         formatDate(inv.invoiceDate),
+        "Invoice No": inv.invoiceNo,
+        "Shop": inv.shopName,
+        "Date": formatDate(inv.invoiceDate),
         "Payment type": PAYMENT_LABELS[inv.paymentType] ?? inv.paymentType,
-        "Amount (Rs)":  inv.totalAmount,
+        "Amount (Rs)": inv.totalAmount,
       })),
-      `${name}-${label.replace(/[\s/–]/g, "-")}`, name
+      `${name}-${label.replace(/[\s/–]/g, "-")}`,
+      name
     );
   }
 
-  function exportCheques(subset: Cheque[], name: string) {
+  function exportChequesXlsx(subset: Cheque[], name: string) {
     exportToExcel(
       subset.map(c => ({
-        "Shop":       c.shopName,
-        "Invoice":    c.invoiceNo,
-        "Bank":       c.bank,
-        "Cheque No":  c.chequeNo,
-        "Amount":     c.amount,
-        "Due Date":   formatDate(c.dueDate),
-        "Status":     c.status,
-        "Deposited":  c.depositedAt ? formatDate(c.depositedAt) : "",
+        "Shop": c.shopName,
+        "Invoice": c.invoiceNo,
+        "Bank": c.bank,
+        "Cheque No": c.chequeNo,
+        "Amount": c.amount,
+        "Due Date": formatDate(c.dueDate),
+        "Status": c.status,
+        "Deposited": c.depositedAt ? formatDate(c.depositedAt) : "",
       })),
-      `${name}-${label.replace(/[\s/–]/g, "-")}`, name
+      `${name}-${label.replace(/[\s/–]/g, "-")}`,
+      name
     );
   }
 
-  function handlePDFExport() {
+  function handlePDF() {
     if (mainTab === "invoices") {
       exportToPDF(
-        `Payments Report — ${label}`,
-        label,
+        `Payments Report — ${label}`, label,
         ["Invoice", "Shop", "Date", "Payment", "Amount"],
         displayedInv.map(inv => [
           inv.invoiceNo, inv.shopName,
@@ -216,18 +236,17 @@ export default function PaymentsReport() {
           `Rs ${inv.totalAmount.toLocaleString()}`,
         ]),
         [
-          { label: "Cash",    value: formatLKR(cashTotal)    },
-          { label: "Card",    value: formatLKR(cardTotal)    },
-          { label: "Cheque",  value: formatLKR(chequeTotal)  },
+          { label: "Cash", value: formatLKR(cashTotal) },
+          { label: "Card", value: formatLKR(cardTotal) },
+          { label: "Cheque", value: formatLKR(chequeTotal) },
           { label: "Pending", value: formatLKR(pendingTotal) },
-          { label: "Total",   value: formatLKR(grandTotal)   },
-          { label: "Period",  value: label                   },
+          { label: "Total", value: formatLKR(grandTotal) },
+          { label: "Period", value: label },
         ]
       );
     } else {
       exportToPDF(
-        `Cheques Report — ${label}`,
-        label,
+        `Cheques Report — ${label}`, label,
         ["Shop", "Invoice", "Bank", "Cheque No", "Amount", "Due Date", "Status"],
         displayedCheq.map(c => [
           c.shopName, c.invoiceNo, c.bank, c.chequeNo,
@@ -235,10 +254,10 @@ export default function PaymentsReport() {
           formatDate(c.dueDate), c.status,
         ]),
         [
-          { label: "Pending",   value: formatLKR(pendingCheques.reduce((s,c)=>s+c.amount,0))   },
-          { label: "Overdue",   value: formatLKR(overdueCheques.reduce((s,c)=>s+c.amount,0))   },
-          { label: "Deposited", value: formatLKR(depositedCheques.reduce((s,c)=>s+c.amount,0)) },
-          { label: "Period",    value: label },
+          { label: "Pending", value: formatLKR(pendingCheques.reduce((s, c) => s + c.amount, 0)) },
+          { label: "Overdue", value: formatLKR(overdueCheques.reduce((s, c) => s + c.amount, 0)) },
+          { label: "Deposited", value: formatLKR(depositedCheques.reduce((s, c) => s + c.amount, 0)) },
+          { label: "Period", value: label },
         ]
       );
     }
@@ -266,37 +285,31 @@ export default function PaymentsReport() {
         />
       </div>
 
-      {/* Summary cards */}
+      {/* Summary cards — clickable to filter */}
       {!loading && invoices.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="cursor-pointer" onClick={() => { setMainTab("invoices"); setInvFilter("cash"); }}>
-            <Card className="text-center hover:border-green-300 transition-colors">
-              <p className="text-sm mb-1">💵</p>
-              <p className="text-lg font-semibold text-green-700">{formatLKR(cashTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Cash · {cashInv.length}</p>
+          {[
+            { emoji: "💵", label: "Cash", value: cashTotal, count: cashInv.length, tab: "invoices" as MainTab, filter: "cash" as InvoiceFilter },
+            { emoji: "💳", label: "Card", value: cardTotal, count: cardInv.length, tab: "invoices" as MainTab, filter: "card" as InvoiceFilter },
+            { emoji: "🏦", label: "Cheque", value: chequeTotal, count: chequeInv.length, tab: "cheques" as MainTab, filter: "all" as InvoiceFilter },
+            { emoji: "⏳", label: "Pending", value: pendingTotal, count: pendingInv.length, tab: "invoices" as MainTab, filter: "pending" as InvoiceFilter },
+          ].map(item => (
+            <Card key={item.label} className="text-center">
+              <div
+                className="h-full w-full cursor-pointer hover:shadow-sm transition-shadow"
+                onClick={() => {
+                  setMainTab(item.tab);
+                  if (item.tab === "invoices") setInvFilter(item.filter);
+                }}
+              >
+                <p className="text-sm mb-1">{item.emoji}</p>
+                <p className="text-base font-semibold text-gray-900 truncate">
+                  {formatLKR(item.value)}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{item.label} · {item.count}</p>
+              </div>
             </Card>
-          </div>
-          <div className="cursor-pointer" onClick={() => { setMainTab("invoices"); setInvFilter("card"); }}>
-            <Card className="text-center hover:border-blue-300 transition-colors">
-              <p className="text-sm mb-1">💳</p>
-              <p className="text-lg font-semibold text-blue-700">{formatLKR(cardTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Card · {cardInv.length}</p>
-            </Card>
-          </div>
-          <div className="cursor-pointer" onClick={() => { setMainTab("cheques"); setCheqFilter("all"); }}>
-            <Card className="text-center hover:border-gray-300 transition-colors">
-              <p className="text-sm mb-1">🏦</p>
-              <p className="text-lg font-semibold text-gray-700">{formatLKR(chequeTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Cheque · {chequeInv.length}</p>
-            </Card>
-          </div>
-          <div className="cursor-pointer" onClick={() => { setMainTab("invoices"); setInvFilter("pending"); }}>
-            <Card className="text-center hover:border-amber-300 transition-colors">
-              <p className="text-sm mb-1">⏳</p>
-              <p className="text-lg font-semibold text-amber-700">{formatLKR(pendingTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Pending · {pendingInv.length}</p>
-            </Card>
-          </div>
+          ))}
         </div>
       )}
 
@@ -307,7 +320,7 @@ export default function PaymentsReport() {
             mainTab === "invoices"
               ? "bg-white text-gray-900 border-brand-500"
               : "bg-transparent text-gray-500 border-transparent hover:text-gray-700")}>
-          Invoices by payment type
+          Invoices by payment
         </button>
         <button onClick={() => setMainTab("cheques")}
           className={cn("flex-1 rounded-lg py-2 text-sm font-medium transition-colors border",
@@ -329,14 +342,14 @@ export default function PaymentsReport() {
         <>
           {/* Filter + export row */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="overflow-x-auto scrollbar-none flex-1">
+            <div className="overflow-x-auto scrollbar-none flex-1 min-w-0">
               <div className="flex gap-2 min-w-max">
                 {([
-                  { value: "all",     label: "All",     count: invoices.length },
-                  { value: "cash",    label: "💵 Cash",  count: cashInv.length  },
-                  { value: "card",    label: "💳 Card",  count: cardInv.length  },
-                  { value: "cheque",  label: "🏦 Cheque",count: chequeInv.length},
-                  { value: "pending", label: "⏳ Pending",count: pendingInv.length},
+                  { value: "all", label: "All", count: invoices.length },
+                  { value: "cash", label: "💵 Cash", count: cashInv.length },
+                  { value: "card", label: "💳 Card", count: cardInv.length },
+                  { value: "cheque", label: "🏦 Cheque", count: chequeInv.length },
+                  { value: "pending", label: "⏳ Pending", count: pendingInv.length },
                 ] as { value: InvoiceFilter; label: string; count: number }[]).map(f => (
                   <button key={f.value} onClick={() => setInvFilter(f.value)}
                     className={cn(
@@ -354,15 +367,14 @@ export default function PaymentsReport() {
                 ))}
               </div>
             </div>
-
-            {/* Per-type download buttons */}
             {canExport && displayedInv.length > 0 && (
               <div className="flex gap-1.5 flex-shrink-0">
-                <button onClick={() => exportInvoices(displayedInv, `${invFilter}-payments`)}
+                <button
+                  onClick={() => exportInvoicesXlsx(displayedInv, `${invFilter}-payments`)}
                   className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
                 </button>
-                <button onClick={handlePDFExport}
+                <button onClick={handlePDF}
                   className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <Download className="h-3.5 w-3.5 text-red-500" /> PDF
                 </button>
@@ -413,35 +425,41 @@ export default function PaymentsReport() {
       {/* ── CHEQUES TAB ── */}
       {!loading && mainTab === "cheques" && (
         <>
-          {/* Cheque summary row */}
+          {/* Cheque summary */}
           {cheques.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
               <Card className="text-center">
                 <p className="text-lg font-semibold text-amber-700">{pendingCheques.length}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{formatLKR(pendingCheques.reduce((s,c)=>s+c.amount,0))}</p>
-                <p className="text-[10px] text-gray-400">Pending</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  {formatLKR(pendingCheques.reduce((s, c) => s + c.amount, 0))}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Pending</p>
               </Card>
               <Card className="text-center">
                 <p className="text-lg font-semibold text-red-700">{overdueCheques.length}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{formatLKR(overdueCheques.reduce((s,c)=>s+c.amount,0))}</p>
-                <p className="text-[10px] text-gray-400">Overdue</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  {formatLKR(overdueCheques.reduce((s, c) => s + c.amount, 0))}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Overdue</p>
               </Card>
               <Card className="text-center">
                 <p className="text-lg font-semibold text-green-700">{depositedCheques.length}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{formatLKR(depositedCheques.reduce((s,c)=>s+c.amount,0))}</p>
-                <p className="text-[10px] text-gray-400">Deposited</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  {formatLKR(depositedCheques.reduce((s, c) => s + c.amount, 0))}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Deposited</p>
               </Card>
             </div>
           )}
 
           {/* Filter + export row */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="overflow-x-auto scrollbar-none flex-1">
+            <div className="overflow-x-auto scrollbar-none flex-1 min-w-0">
               <div className="flex gap-2 min-w-max">
                 {([
-                  { value: "all",       label: "All",       count: cheques.length          },
-                  { value: "pending",   label: "Pending",   count: pendingCheques.length   },
-                  { value: "overdue",   label: "⚠ Overdue", count: overdueCheques.length   },
+                  { value: "all", label: "All", count: cheques.length },
+                  { value: "pending", label: "Pending", count: pendingCheques.length },
+                  { value: "overdue", label: "⚠ Overdue", count: overdueCheques.length },
                   { value: "deposited", label: "Deposited", count: depositedCheques.length },
                 ] as { value: ChequeFilter; label: string; count: number }[]).map(f => (
                   <button key={f.value} onClick={() => setCheqFilter(f.value)}
@@ -462,14 +480,14 @@ export default function PaymentsReport() {
                 ))}
               </div>
             </div>
-
             {canExport && displayedCheq.length > 0 && (
               <div className="flex gap-1.5 flex-shrink-0">
-                <button onClick={() => exportCheques(displayedCheq, `cheques-${cheqFilter}`)}
+                <button
+                  onClick={() => exportChequesXlsx(displayedCheq, `cheques-${cheqFilter}`)}
                   className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
                 </button>
-                <button onClick={handlePDFExport}
+                <button onClick={handlePDF}
                   className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <Download className="h-3.5 w-3.5 text-red-500" /> PDF
                 </button>
@@ -485,9 +503,9 @@ export default function PaymentsReport() {
           ) : (
             <Card padding={false}>
               {displayedCheq.map((c, i) => {
-                const due      = toDate(c.dueDate) ?? new Date();
+                const due = toDate(c.dueDate) ?? new Date();
                 const isOverdue = c.status === "pending" && due < now;
-                const days     = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+                const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
                 return (
                   <div key={c.id}
                     className={cn("flex items-start gap-3 px-4 py-3",
@@ -497,11 +515,11 @@ export default function PaymentsReport() {
                         <p className="text-sm font-medium text-gray-900 truncate">{c.shopName}</p>
                         <Badge variant={
                           c.status === "deposited" ? "success" :
-                          isOverdue ? "danger" : "warning"
+                            isOverdue ? "danger" : "warning"
                         }>
                           {c.status === "deposited" ? "Deposited" :
-                           isOverdue ? `Overdue ${Math.abs(days)}d` :
-                           days === 0 ? "Due today" : `Due in ${days}d`}
+                            isOverdue ? `Overdue ${Math.abs(days)}d` :
+                              days === 0 ? "Due today" : `Due in ${days}d`}
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-500 truncate">
