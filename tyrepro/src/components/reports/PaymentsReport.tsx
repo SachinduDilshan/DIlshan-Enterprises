@@ -36,6 +36,7 @@ interface Cheque {
   chequeNo: string;
   amount: number;
   dueDate: any;
+  createdAt?: any;
   depositedAt?: any;
   status: string;
 }
@@ -101,6 +102,8 @@ export default function PaymentsReport() {
   // We do NOT filter in Firestore to avoid composite index requirements.
   // All date filtering happens client-side below.
 
+  // ── Load ALL data once on mount ───────────────────────
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -109,7 +112,7 @@ export default function PaymentsReport() {
       try {
         const [invSnap, cheqSnap] = await Promise.all([
           getDocs(query(collection(db, "invoices"), orderBy("invoiceDate", "desc"))),
-          getDocs(query(collection(db, "cheques"), orderBy("dueDate", "asc"))),
+          getDocs(query(collection(db, "cheques"), orderBy("createdAt", "desc"))),
         ]);
 
         if (!cancelled) {
@@ -135,10 +138,17 @@ export default function PaymentsReport() {
 
   // ── Client-side date filtering ────────────────────────
 
-  // Compute range boundaries fresh every render
   const { start, end, label } = getDateRange(range, customFrom, customTo);
 
   const isCustomIncomplete = range === "custom" && (!customFrom || !customTo);
+
+  function toDate(val: any): Date | null {
+    if (!val) return null;
+    if (typeof val?.toDate === "function") return val.toDate();
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
 
   function inRange(val: any): boolean {
     if (isCustomIncomplete) return false;
@@ -148,8 +158,17 @@ export default function PaymentsReport() {
     return d >= start && d <= end;
   }
 
+  // Invoices filtered by invoiceDate
   const invoices = allInvoices.filter(inv => inRange(inv.invoiceDate));
-  const cheques = allCheques.filter(c => inRange(c.dueDate));
+
+  // Cheques filtered by createdAt (when the cheque was issued)
+  // This matches the invoice period — a cheque issued this month
+  // shows under "this month" even if its due date is next month
+  const cheques = allCheques.filter(c => {
+    // Use createdAt if available, fall back to dueDate
+    const dateToCheck = (c as any).createdAt ?? c.dueDate;
+    return inRange(dateToCheck);
+  });
 
   // ── Computed invoice groups ───────────────────────────
 
