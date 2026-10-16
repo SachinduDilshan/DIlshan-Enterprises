@@ -2,20 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 async function getAdmin() {
   const { getApps, initializeApp, cert } = await import("firebase-admin/app");
-  const { getFirestore } = await import("firebase-admin/firestore");
+  const { getFirestore }                 = await import("firebase-admin/firestore");
   if (getApps().length === 0) {
     initializeApp({
       credential: cert({
-        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
+        projectId:   process.env.FIREBASE_ADMIN_PROJECT_ID!,
         clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL!,
-        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+        privateKey:  process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
       }),
     });
   }
-  return { db: getFirestore() };
+  return getFirestore();
 }
 
-// Email via Gmail SMTP using Nodemailer
 async function sendEmail(to: string, subject: string, html: string) {
   const nodemailer = await import("nodemailer");
   const transporter = nodemailer.default.createTransport({
@@ -26,18 +25,22 @@ async function sendEmail(to: string, subject: string, html: string) {
     },
   });
   await transporter.sendMail({
-    from: `"TyrePro — Dilshan Enterprises" <${process.env.GMAIL_USER}>`,
+    from:    `"TyrePro — Dilshan Enterprises" <${process.env.GMAIL_USER}>`,
     to,
     subject,
     html,
   });
 }
 
-function buildEmailHtml(alerts: { type: string; message: string; count: number; items: string[] }[]) {
+function buildEmailHtml(
+  alerts: { type: string; message: string; count: number; items: string[] }[]
+) {
+  const CHEQUE_ALERT_TYPES = ["cheque_due_today", "cheque_due_soon", "cheque_overdue"];
+
   const alertRows = alerts.map(a => {
-    const isUrgent = a.type === "cheque_due_today" || a.type === "cheque_overdue";
+    const isUrgent    = a.type === "cheque_due_today" || a.type === "cheque_overdue";
     const borderColor = isUrgent ? "#EF4444" : a.type.includes("cheque") ? "#F59E0B" : "#4338CA";
-    const bgColor = isUrgent ? "#FEF2F2" : "#F9FAFB";
+    const bgColor     = isUrgent ? "#FEF2F2" : "#F9FAFB";
 
     return `
       <div style="margin-bottom:16px;padding:14px 16px;border-radius:8px;background:${bgColor};border-left:4px solid ${borderColor}">
@@ -52,7 +55,11 @@ function buildEmailHtml(alerts: { type: string; message: string; count: number; 
     `;
   }).join("");
 
-  const hasUrgent = alerts.some(a => a.type === "cheque_due_today" || a.type === "cheque_overdue");
+  const hasUrgent = alerts.some(a =>
+    a.type === "cheque_due_today" || a.type === "cheque_overdue"
+  );
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   return `
     <!DOCTYPE html>
@@ -62,40 +69,40 @@ function buildEmailHtml(alerts: { type: string; message: string; count: number; 
         <div style="background:#3730A3;padding:24px 28px">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">Dilshan Enterprises</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">
-            TyrePro — Morning Alert Summary · ${new Date().toLocaleDateString("en-LK", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+            TyrePro Alert · ${new Date().toLocaleDateString("en-LK", {
+              weekday: "long", day: "2-digit", month: "long", year: "numeric"
+            })}
           </p>
         </div>
 
         ${hasUrgent ? `
         <div style="background:#FEF2F2;border-bottom:2px solid #EF4444;padding:12px 28px">
           <p style="margin:0;font-size:14px;font-weight:600;color:#991B1B">
-            ⚠️ Action required today — cheque(s) due for deposit
+            ⚠️ Action required — please review immediately
           </p>
         </div>
         ` : ""}
 
         <div style="padding:24px 28px">
           <p style="margin:0 0 20px;font-size:14px;color:#444">
-            Good morning. Here is your daily alert summary for today.
-            Please review and take action as needed.
+            The following items require your attention in TyrePro.
           </p>
           ${alertRows}
           <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/cheques"
+            <a href="${appUrl}/dashboard"
                style="display:inline-block;background:#4338CA;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;margin-right:8px">
-              View cheques →
+              Open dashboard →
             </a>
-            <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard"
+            <a href="${appUrl}/dashboard/cheques"
                style="display:inline-block;background:#f3f4f6;color:#374151;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500">
-              Open dashboard
+              View cheques
             </a>
           </div>
         </div>
 
         <div style="padding:16px 28px;background:#f9fafb;border-top:1px solid #eee">
           <p style="margin:0;font-size:12px;color:#999">
-            This alert was generated automatically at 7:00 AM Sri Lanka time.
-            Sent by TyrePro for Dilshan Enterprises.
+            Sent automatically by TyrePro · ${new Date().toLocaleString("en-LK")}
           </p>
         </div>
       </div>
@@ -106,26 +113,26 @@ function buildEmailHtml(alerts: { type: string; message: string; count: number; 
 
 export async function POST(req: NextRequest) {
   try {
-    const { db } = await getAdmin();
+    const db = await getAdmin();
 
-    // Load all alerts
+    // Load alerts
     const alertsSnap = await db.collection("systemAlerts").doc("latest").get();
     if (!alertsSnap.exists) {
-      return NextResponse.json({ message: "No alerts to send" });
+      return NextResponse.json({ message: "No alerts document", emailsSent: 0 });
     }
+
     const allAlerts: { type: string; message: string; count: number; items: string[] }[] =
-      alertsSnap.data()?.alerts ?? [];
+      (alertsSnap.data()?.alerts ?? []).filter((a: any) => a.count > 0);
 
     if (allAlerts.length === 0) {
-      return NextResponse.json({ message: "No active alerts" });
+      return NextResponse.json({ message: "No active alerts", emailsSent: 0 });
     }
 
-    // Cheque alert types
-    const CHEQUE_ALERT_TYPES = ["cheque_due_soon", "cheque_overdue"];
+    const CHEQUE_TYPES = ["cheque_due_today", "cheque_due_soon", "cheque_overdue"];
 
-    // Load all users
-    const usersSnap = await db.collection("users").where("active", "==", true).get();
-    let emailsSent = 0;
+    // Load users
+    const usersSnap = await db.collection("users").get();
+    let emailsSent  = 0;
     const errors: string[] = [];
 
     for (const userDoc of usersSnap.docs) {
@@ -134,42 +141,41 @@ export async function POST(req: NextRequest) {
 
       // Drivers never get emails
       if (role === "driver" || !email) continue;
+      if (!user.active) continue;
 
-      // Load user's notification preferences
+      // Load alert preferences
       const prefSnap = await db.collection("alertSettings").doc(uid).get();
-      const prefs = prefSnap.exists ? prefSnap.data() ?? {} : {};
+      const prefs    = prefSnap.exists ? prefSnap.data() ?? {} : {};
 
-      // Build alerts for this user based on role + preferences
-      let userAlerts = allAlerts.filter(a => {
+      // Filter alerts by role and preferences
+      const userAlerts = allAlerts.filter(a => {
         // Sales rep never gets cheque alerts
-        if (role === "sales_rep" && CHEQUE_ALERT_TYPES.includes(a.type)) return false;
-
-        // Check if user has disabled this alert type
+        if (role === "sales_rep" && CHEQUE_TYPES.includes(a.type)) return false;
+        // Check user preference — default true if not set
         const prefKey = `notify_${a.type}`;
         if (prefs[prefKey] === false) return false;
-
         return true;
       });
 
       if (userAlerts.length === 0) continue;
 
       try {
-        const subject = `TyrePro alert: ${userAlerts.length} item${userAlerts.length > 1 ? "s" : ""} need attention`;
-        const html = buildEmailHtml(userAlerts);
-        await sendEmail(email, subject, html);
+        const subject = `TyrePro: ${userAlerts.length} alert${userAlerts.length > 1 ? "s" : ""} need attention`;
+        await sendEmail(email, subject, buildEmailHtml(userAlerts));
         emailsSent++;
 
-        // Log that email was sent
+        // Log
         await db.collection("emailLogs").add({
-          to: email,
+          to:         email,
           uid,
           role,
           alertCount: userAlerts.length,
           alertTypes: userAlerts.map(a => a.type),
-          sentAt: new Date(),
+          sentAt:     new Date(),
         });
       } catch (err: any) {
         errors.push(`${email}: ${err.message}`);
+        console.error(`Failed to send to ${email}:`, err.message);
       }
     }
 

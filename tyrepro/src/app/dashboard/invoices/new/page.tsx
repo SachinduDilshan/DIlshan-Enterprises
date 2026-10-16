@@ -20,15 +20,16 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Plus, Trash2, ArrowLeft, ChevronDown, Check } from "lucide-react";
 import Link from "next/link";
 import type { Product } from "@/types";
+import { triggerAlerts } from "@/lib/triggerAlerts";
 
 // ── Types ─────────────────────────────────────────────────
 
 interface LineItem {
-  productId:   string;
+  productId: string;
   productName: string;
-  productSku:  string;
-  qty:         number;
-  unitPrice:   number;
+  productSku: string;
+  qty: number;
+  unitPrice: number;
 }
 
 // ── Payment options ───────────────────────────────────────
@@ -43,27 +44,27 @@ type InvoicePaymentType =
 type PaymentType = InvoicePaymentType | "card" | "pending";
 
 const PAYMENT_OPTS: Array<{ value: PaymentType; label: string; desc: string; emoji: string }> = [
-  { value: "cash",       label: "Cash",             desc: "Paid immediately",        emoji: "💵" },
-  { value: "card",       label: "Card payment",     desc: "Debit / credit card",     emoji: "💳" },
-  { value: "cheque_15d", label: "Cheque — 15 days", desc: "Due in 15 days",          emoji: "🏦" },
-  { value: "cheque_30d", label: "Cheque — 30 days", desc: "Due in 30 days",          emoji: "🏦" },
-  { value: "cheque_45d", label: "Cheque — 45 days", desc: "Due in 45 days",          emoji: "🏦" },
-  { value: "cheque_60d", label: "Cheque — 60 days", desc: "Due in 60 days",          emoji: "🏦" },
-  { value: "pending",    label: "Pending / Credit", desc: "Payment to be collected", emoji: "⏳" },
+  { value: "cash", label: "Cash", desc: "Paid immediately", emoji: "💵" },
+  { value: "card", label: "Card payment", desc: "Debit / credit card", emoji: "💳" },
+  { value: "cheque_15d", label: "Cheque — 15 days", desc: "Due in 15 days", emoji: "🏦" },
+  { value: "cheque_30d", label: "Cheque — 30 days", desc: "Due in 30 days", emoji: "🏦" },
+  { value: "cheque_45d", label: "Cheque — 45 days", desc: "Due in 45 days", emoji: "🏦" },
+  { value: "cheque_60d", label: "Cheque — 60 days", desc: "Due in 60 days", emoji: "🏦" },
+  { value: "pending", label: "Pending / Credit", desc: "Payment to be collected", emoji: "⏳" },
 ];
 
 // ── Auto-generate invoice number ──────────────────────────
 
 async function nextInvoiceNo(): Promise<string> {
-  const now     = new Date();
-  const year    = now.getFullYear();
-  const month   = String(now.getMonth() + 1).padStart(2, "0");
-  const day     = String(now.getDate()).padStart(2, "0");
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
   const dateStr = `${year}${month}${day}`;
 
   const counterRef = doc(db, "counters", "invoices");
-  const snap       = await getDoc(counterRef);
-  const next       = (snap.exists() ? snap.data().count : 0) + 1;
+  const snap = await getDoc(counterRef);
+  const next = (snap.exists() ? snap.data().count : 0) + 1;
   return `INV-${dateStr}-${String(next).padStart(4, "0")}`;
 }
 
@@ -94,15 +95,15 @@ function getTyreNameSize(name: string): string {
 // ── Custom tyre selector ──────────────────────────────────
 
 interface TyreSelectProps {
-  value:    string;
+  value: string;
   products: Product[];
   onChange: (productId: string) => void;
 }
 
 function TyreSelect({ value, products, onChange }: TyreSelectProps) {
-  const [open, setOpen]   = useState(false);
-  const wrapperRef        = useRef<HTMLDivElement>(null);
-  const selectedProduct   = products.find(p => p.id === value) ?? null;
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const selectedProduct = products.find(p => p.id === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -157,27 +158,27 @@ function TyreSelect({ value, products, onChange }: TyreSelectProps) {
 // ── Main page ─────────────────────────────────────────────
 
 export default function NewInvoicePage() {
-  const router      = useRouter();
+  const router = useRouter();
   const { appUser } = useAuth();
 
-  const { shops }    = useShops();
+  const { shops } = useShops();
   const { products } = useProducts();
-  const { stock }    = useStock();
+  const { stock } = useStock();
 
-  const [shopId, setShopId]           = useState("");
-  const [lineItems, setLineItems]     = useState<LineItem[]>([]);
+  const [shopId, setShopId] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
-  const [chequeNo, setChequeNo]       = useState("");
-  const [bank, setBank]               = useState("");
+  const [chequeNo, setChequeNo] = useState("");
+  const [bank, setBank] = useState("");
   const [chequeDueDate, setChequeDueDate] = useState("");
-  const [invoiceNo, setInvoiceNo]     = useState("");
-  const [saving, setSaving]           = useState(false);
-  const [error, setError]             = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const isCheque  = paymentType.startsWith("cheque_");
+  const isCheque = paymentType.startsWith("cheque_");
   const isPending = paymentType === "pending";
-  const isCard    = paymentType === "card";
-  const total     = lineItems.reduce((s, li) => s + li.qty * li.unitPrice, 0);
+  const isCard = paymentType === "card";
+  const total = lineItems.reduce((s, li) => s + li.qty * li.unitPrice, 0);
   const selectedShop = shops.find(s => s.id === shopId) ?? null;
 
   // ── Auto-fill due date when cheque type changes ──────
@@ -217,10 +218,10 @@ export default function NewInvoicePage() {
         const product = products.find(p => p.id === value);
         return {
           ...li,
-          productId:   value,
-          productName: product?.name      ?? "",
-          productSku:  product?.sku       ?? "",
-          unitPrice:   product?.unitPrice ?? 0,
+          productId: value,
+          productName: product?.name ?? "",
+          productSku: product?.sku ?? "",
+          unitPrice: product?.unitPrice ?? 0,
         };
       }
       return { ...li, [field]: value };
@@ -252,7 +253,7 @@ export default function NewInvoicePage() {
     e.preventDefault();
     setError("");
 
-    if (!shopId)              { setError("Please select a shop."); return; }
+    if (!shopId) { setError("Please select a shop."); return; }
     if (lineItems.length === 0) { setError("Add at least one product."); return; }
     if (lineItems.find(li => !li.productId)) {
       setError("Please select a product for each line item."); return;
@@ -291,20 +292,20 @@ export default function NewInvoicePage() {
       // 2. Create invoice using the full invoice schema expected by the Invoice type.
       const invoiceRef = doc(invoicesCol);
       await setDoc(invoiceRef, {
-        id:          invoiceRef.id,
+        id: invoiceRef.id,
         invoiceNo,
         shopId,
-        shopName:    selectedShop?.name ?? "",
+        shopName: selectedShop?.name ?? "",
         warehouseId: "",
         warehouseName: "",
         totalAmount: total,
         paymentType: invoicePaymentType,
-        status:      "confirmed",
-        notes:       "",
+        status: "confirmed",
+        notes: "",
         invoiceDate: serverTimestamp(),
-        createdBy:   appUser?.uid ?? "",
-        createdAt:   serverTimestamp(),
-        updatedAt:   serverTimestamp(),
+        createdBy: appUser?.uid ?? "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
       // 3. FIX: Deduct stock using correct stock document ID pattern
@@ -319,7 +320,7 @@ export default function NewInvoicePage() {
             if (stockSnap.exists()) {
               const current = (stockSnap.data() as any).qty ?? 0;
               tx.update(stockRef, {
-                qty:       Math.max(0, current - li.qty),
+                qty: Math.max(0, current - li.qty),
                 updatedAt: serverTimestamp(),
               });
             }
@@ -332,16 +333,16 @@ export default function NewInvoicePage() {
         const due = new Date(chequeDueDate + "T23:59:59");
         const chequeRef = doc(chequesCol);
         await setDoc(chequeRef, {
-          id:        chequeRef.id,
+          id: chequeRef.id,
           shopId,
-          shopName:  selectedShop?.name ?? "",
+          shopName: selectedShop?.name ?? "",
           invoiceId: invoiceRef.id,
           invoiceNo,
-          chequeNo:  chequeNo.trim(),
-          bank:      bank.trim(),
-          amount:    total,
-          dueDate:   Timestamp.fromDate(due),
-          status:    "pending",
+          chequeNo: chequeNo.trim(),
+          bank: bank.trim(),
+          amount: total,
+          dueDate: Timestamp.fromDate(due),
+          status: "pending",
           createdAt: serverTimestamp(),
         });
       }
@@ -355,14 +356,17 @@ export default function NewInvoicePage() {
             if (shopSnap.exists()) {
               tx.update(shopRef, {
                 outstandingBalance: increment(total),
-                updatedAt:          serverTimestamp(),
+                updatedAt: serverTimestamp(),
               });
             }
           });
-        } catch {}
+        } catch { }
       }
 
       router.push(`/dashboard/invoices/${invoiceRef.id}`);
+      router.push(`/dashboard/invoices/${invoiceRef.id}`);
+      // Fire alerts in background — don't await so it doesn't block navigation
+      triggerAlerts();
     } catch (err: any) {
       setError(err.message);
       setSaving(false);
@@ -432,7 +436,7 @@ export default function NewInvoicePage() {
 
           <div className="space-y-3">
             {lineItems.map((li, idx) => {
-              const avail     = getAvailableStock(li.productId);
+              const avail = getAvailableStock(li.productId);
               const overStock = li.productId !== "" && li.qty > avail;
 
               return (
@@ -514,11 +518,10 @@ export default function NewInvoicePage() {
             {PAYMENT_OPTS.map(opt => (
               <button key={opt.value} type="button"
                 onClick={() => setPaymentType(opt.value)}
-                className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                  paymentType === opt.value
+                className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition-colors ${paymentType === opt.value
                     ? "border-brand-400 bg-brand-50 text-brand-800"
                     : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
-                }`}>
+                  }`}>
                 <span className="text-base mb-0.5">{opt.emoji}</span>
                 <span className="text-xs font-medium leading-tight">{opt.label}</span>
                 <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{opt.desc}</span>
@@ -547,11 +550,10 @@ export default function NewInvoicePage() {
                     return (
                       <button key={days} type="button"
                         onClick={() => setChequeDueDate(val)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          chequeDueDate === val
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${chequeDueDate === val
                             ? "border-brand-400 bg-brand-50 text-brand-700"
                             : "border-gray-200 text-gray-600 hover:border-gray-300"
-                        }`}>
+                          }`}>
                         {days}d
                       </button>
                     );
