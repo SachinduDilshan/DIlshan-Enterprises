@@ -151,7 +151,7 @@ export default function LoginPage() {
                 </>
               ) : (
                 <>
-                  Sign in to continue
+                  Sign in to Continue
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -161,7 +161,7 @@ export default function LoginPage() {
 
         {/* Footer note */}
         <p className="mt-6 text-center text-xs text-gray-400 max-w-xs leading-relaxed">
-          New accounts are created by your administrator.
+          New accounts are created by your authorized administrator.
           Contact your admin if you need access.
         </p>
 
