@@ -89,7 +89,7 @@ export function Sidebar() {
       <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
         <div>
           <p className="text-sm font-medium text-white leading-tight">Dilshan Enterprises</p>
-          <p className="text-[11px] text-white/40 leading-tight">Tire Distributors</p>
+          <p className="text-[11px] text-white/40 leading-tight">Tire Distributor</p>
         </div>
         {canSeeAlerts && <NotificationBell position="sidebar" />}
       </div>

@@ -9,15 +9,14 @@ function getAdminApp(): App {
 
   adminApp = initializeApp({
     credential: cert({
-      projectId:   process.env.FIREBASE_ADMIN_PROJECT_ID!,
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
       clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL!,
-      // \n characters in .env.local must be real newlines
-      privateKey:  process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+      privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n"),
     }),
   });
 
   return adminApp;
 }
 
-export const adminDb   = getFirestore(getAdminApp());
+export const adminDb = getFirestore(getAdminApp());
 export const adminAuth = getAuth(getAdminApp());

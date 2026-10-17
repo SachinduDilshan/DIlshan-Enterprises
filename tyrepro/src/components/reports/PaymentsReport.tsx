@@ -346,7 +346,7 @@ export default function PaymentsReport() {
             mainTab === "cheques"
               ? "bg-white text-gray-900 border-brand-500"
               : "bg-transparent text-gray-500 border-transparent hover:text-gray-700")}>
-          Cheques tracker
+          Cheques Tracker
         </button>
       </div>
 
@@ -452,7 +452,7 @@ export default function PaymentsReport() {
                 <p className="text-xs text-gray-500 mt-0.5 truncate">
                   {formatLKR(pendingCheques.reduce((s, c) => s + c.amount, 0))}
                 </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Pending</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Pending...</p>
               </Card>
               <Card className="text-center">
                 <p className="text-lg font-semibold text-red-700">{overdueCheques.length}</p>
