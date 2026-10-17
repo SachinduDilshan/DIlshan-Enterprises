@@ -521,7 +521,7 @@ These rules are enforced throughout the application:
 **Sachindu Dilshan Abeyrathne**
 Computer Science Graduate (First Class Honours) — University of Bedfordshire via SLIIT City University
 
-- Email: sachindudilshan7@gmail.com
+- Email: sachindud498@gmail.com
 - LinkedIn: [linkedin.com/in/sachindu-dilshan-abeyrathne](https://linkedin.com/in/sachindu-dilshan-abeyrathne)
 - GitHub: [github.com/SachinduDilshan](https://github.com/SachinduDilshan)
 
