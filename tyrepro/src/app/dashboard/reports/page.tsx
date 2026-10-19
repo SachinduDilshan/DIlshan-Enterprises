@@ -7,7 +7,6 @@ import {
   FileText,
   Package,
   RotateCcw,
-  CalendarClock,
   CreditCard,
 } from "lucide-react";
 
@@ -123,9 +122,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* =====================================================
-          REPORT CONTENT
-      ===================================================== */}
+
       <div className="w-full max-w-full">
         {tab === "daily" && <SalesReport />}
 

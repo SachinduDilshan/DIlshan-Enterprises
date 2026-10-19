@@ -6,7 +6,6 @@ import {
   doc, getDoc, onSnapshot, updateDoc,
   serverTimestamp, query, orderBy,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { dispatchesCol, dispatchStopsCol } from "@/lib/firestore-collections";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader } from "@/components/ui/Card";
