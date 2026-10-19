@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 async function runAll(base: string) {
-  // Run all checks in parallel
   await Promise.all([
     fetch(`${base}/api/notify-cheques`),
     fetch(`${base}/api/notify-stock`),
     fetch(`${base}/api/notify-uc`),
   ]);
 
-  // Send emails
   const emailRes  = await fetch(`${base}/api/send-notification-email`, { method: "POST" });
   const emailData = await emailRes.json();
 
@@ -20,6 +18,16 @@ async function runAll(base: string) {
 }
 
 export async function GET(req: NextRequest) {
+  // Verify cron secret — skip check in development
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const incoming = req.headers.get("x-cron-secret") ??
+                     req.nextUrl.searchParams.get("secret");
+    if (incoming !== secret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const base   = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const result = await runAll(base);
