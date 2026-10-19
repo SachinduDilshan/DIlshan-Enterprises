@@ -1,14 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function getBaseUrl(req: NextRequest): string {
+  // First try the env var
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (envUrl && envUrl.startsWith("http")) {
+    return envUrl.replace(/\/$/, ""); // strip trailing slash
+  }
+
+  // Fall back to deriving from the request URL itself
+  const { protocol, host } = new URL(req.url);
+  return `${protocol}//${host}`;
+}
+
 async function runAll(base: string) {
-  await Promise.all([
+  console.log("run-alerts base URL:", base);
+
+  const [cheqRes, stockRes, ucRes] = await Promise.all([
     fetch(`${base}/api/notify-cheques`),
     fetch(`${base}/api/notify-stock`),
     fetch(`${base}/api/notify-uc`),
   ]);
 
+  console.log("notify-cheques status:", cheqRes.status);
+  console.log("notify-stock status:",   stockRes.status);
+  console.log("notify-uc status:",      ucRes.status);
+
   const emailRes  = await fetch(`${base}/api/send-notification-email`, { method: "POST" });
   const emailData = await emailRes.json();
+
+  console.log("email result:", emailData);
 
   return {
     success:    true,
@@ -18,7 +38,6 @@ async function runAll(base: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret — skip check in development
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const incoming = req.headers.get("x-cron-secret") ??
@@ -29,7 +48,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const base   = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base   = getBaseUrl(req);
     const result = await runAll(base);
     return NextResponse.json(result);
   } catch (err: any) {
