@@ -1607,39 +1607,85 @@ export default function InventoryPage() {
               </div>
             )}
 
-          {/* Filters */}
-          {/* Tyre type filter */}
-          <div className="mb-4 flex gap-2 items-center">
-            <div className="flex-1 min-w-0">
-              <Dropdown value={warehouseId} onChange={setWarehouseId} options={WAREHOUSES} />
+          {/* Inventory filters */}
+          <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Filter inventory
+                </h2>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Narrow stock by warehouse and vehicle category.
+                </p>
+              </div>
+
+              {(warehouseId || tyreTab !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWarehouseId("");
+                    setTyreTab("all");
+                  }}
+                  className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-50"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
-            <div className="overflow-x-auto scrollbar-none">
-              <div className="flex gap-1 min-w-max">
-                {[
-                  { value: "all", label: "All" },
-                  { value: "bike", label: "🏍 Bike" },
-                  { value: "three_wheeler", label: "🛺 3W" },
-                  { value: "car", label: "🚗 Car" },
-                  { value: "suv", label: "🚙 SUV" },
-                  { value: "van", label: "🚐 Van" },
-                  { value: "truck", label: "🚛 Truck" },
-                  { value: "bus", label: "🚌 Bus" },
-                  { value: "tractor", label: "🚜 Trac" },
-                  { value: "radial", label: "⭕ Radial" },
-                ].map(t => (
-                  <button key={t.value} onClick={() => setTyreTab(t.value as any)}
-                    className={cn(
-                      "px-3 py-2 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap flex-shrink-0",
-                      tyreTab === t.value
-                        ? "bg-brand-600 text-white border-brand-600"
-                        : "bg-white text-gray-500 border-gray-200 hover:text-gray-700"
-                    )}>
-                    {t.label}
-                  </button>
-                ))}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0">
+                <Dropdown
+                  label="Warehouse"
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  options={WAREHOUSES}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <Dropdown
+                  label="Vehicle / tyre category"
+                  value={tyreTab}
+                  onChange={(value) => setTyreTab(value as typeof tyreTab)}
+                  options={[
+                    { value: "all", label: "All vehicle types" },
+                    { value: "bike", label: "🏍️  Motorcycle" },
+                    { value: "three_wheeler", label: "🛺  Three-wheeler" },
+                    { value: "car", label: "🚗  Car" },
+                    { value: "suv", label: "🚙  SUV / Jeep" },
+                    { value: "van", label: "🚐  Van" },
+                    { value: "truck", label: "🚛  Truck / Lorry" },
+                    { value: "bus", label: "🚌  Bus" },
+                    { value: "tractor", label: "🚜  Tractor" },
+                    { value: "radial", label: "⭕  Radial" },
+                  ]}
+                />
               </div>
             </div>
-          </div>
+
+            {tyreTab !== "all" && (
+              <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+                <span className="inline-flex h-2 w-2 rounded-full bg-brand-600" />
+                <p className="text-xs text-gray-600">
+                  Showing category:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {{
+                      bike: "Motorcycle",
+                      three_wheeler: "Three-wheeler",
+                      car: "Car",
+                      suv: "SUV / Jeep",
+                      van: "Van",
+                      truck: "Truck / Lorry",
+                      bus: "Bus",
+                      tractor: "Tractor",
+                      radial: "Radial",
+                    }[tyreTab]}
+                  </span>
+                </p>
+              </div>
+            )}
+          </section>
 
           {stockLoading && (
             <div className="flex justify-center py-12">
