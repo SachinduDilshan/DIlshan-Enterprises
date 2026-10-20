@@ -84,10 +84,10 @@ function StockBar({
     qty <= 0
       ? "bg-gray-200"
       : qty <= reorderLevel
-      ? "bg-red-500"
-      : qty <= reorderLevel * 2
-      ? "bg-amber-500"
-      : "bg-green-700";
+        ? "bg-red-500"
+        : qty <= reorderLevel * 2
+          ? "bg-amber-500"
+          : "bg-green-700";
 
   return (
     <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100">
@@ -476,221 +476,126 @@ function StockRow({
   );
 }
 
+
+
+const TYRE_TYPES: { value: TyreType; label: string; emoji: string; sizes: string }[] = [
+  { value: "bike", label: "Bike", emoji: "🏍", sizes: "e.g. 2.75-17, 3.00-17" },
+  { value: "three_wheeler", label: "3-Wheeler", emoji: "🛺", sizes: "e.g. 400-8, 4.00-8" },
+  { value: "car", label: "Car", emoji: "🚗", sizes: "e.g. 165/70 R13, 185/65 R15" },
+  { value: "suv", label: "SUV / Jeep", emoji: "🚙", sizes: "e.g. 215/65 R16, 265/70 R17" },
+  { value: "van", label: "Van", emoji: "🚐", sizes: "e.g. 195/70 R15, 165 R13" },
+  { value: "truck" as TyreType, label: "Truck / Lorry", emoji: "🚛", sizes: "e.g. 7.50-16, 10.00-20" },
+  { value: "bus", label: "Bus", emoji: "🚌", sizes: "e.g. 8.25-20, 9.00-20" },
+  { value: "tractor", label: "Tractor", emoji: "🚜", sizes: "e.g. 6.00-16, 7.50-16" },
+  { value: "radial", label: "Radial", emoji: "⭕", sizes: "e.g. 175/65 R14, 205/55 R16" },
+];
+
+const TUBE_TYPES = [
+  { value: "tube_type", label: "Tube type" },
+  { value: "tubeless", label: "Tubeless" },
+];
+
 /* ============================================================
    PRODUCT MODAL
 ============================================================ */
 
-function ProductModal({
-  existing,
-  onClose,
-}: {
-  existing?: Product;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState(
-    existing?.name ?? ""
-  );
-
-  const [brand, setBrand] = useState(
-    existing?.brand ?? "CEAT"
-  );
-
+function ProductModal({ existing, onClose }: { existing?: Product; onClose: () => void }) {
+  const [name, setName] = useState(existing?.name ?? "");
+  const [brand, setBrand] = useState(existing?.brand ?? "CEAT");
   const [customBrand, setCustom] = useState("");
-
-  const [size, setSize] = useState(
-    existing?.size ?? ""
-  );
-
-  const [type, setType] = useState<TyreType>(
-    existing?.type ?? "bike"
-  );
-
-  const [tubeType, setTubeType] = useState<
-    "tube_type" | "tubeless"
-  >("tube_type");
-
-  const [unitPrice, setPrice] = useState(
-    existing?.unitPrice ?? 0
-  );
-
+  const [size, setSize] = useState(existing?.size ?? "");
+  const [type, setType] = useState<TyreType>(existing?.type ?? "bike");
+  const [tubeType, setTubeType] = useState<"tube_type" | "tubeless">("tube_type");
+  const [unitPrice, setPrice] = useState(existing?.unitPrice ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const selectedTypeInfo = TYRE_TYPES.find(t => t.value === type);
+
   function buildName() {
-    const b =
-      brand === "Other"
-        ? customBrand
-        : brand;
-
-    const tube =
-      tubeType === "tubeless"
-        ? "Tubeless"
-        : "Tube Type";
-
+    const b = brand === "Other" ? customBrand : brand;
+    const tube = tubeType === "tubeless" ? "Tubeless" : "Tube Type";
     return `${size} ${b} ${tube}`.trim();
   }
 
   function buildSku() {
-    const b =
-      brand === "Other"
-        ? customBrand
-        : brand;
-
-    const t =
-      type === "bike"
-        ? "BK"
-        : "3W";
-
-    const tube =
-      tubeType === "tubeless"
-        ? "TL"
-        : "TT";
-
-    return `${size
-      .replace(/[^0-9./]/g, "")}-${b
-      .toUpperCase()
-      .slice(0, 4)}-${t}-${tube}`.replace(
-      /\s/g,
-      ""
-    );
+    const b = brand === "Other" ? customBrand : brand;
+    const typeCode: Record<string, string> = {
+      bike: "BK",
+      three_wheeler: "3W",
+      car: "CR",
+      suv: "SV",
+      van: "VN",
+      truck: "TK",
+      bus: "BS",
+      tractor: "TR",
+      radial: "RD",
+    };
+    const tube = tubeType === "tubeless" ? "TL" : "TT";
+    return `${size.replace(/[^0-9./RrXx]/g, "")}-${b.toUpperCase().slice(0, 4)}-${typeCode[type]}-${tube}`
+      .replace(/\s/g, "");
   }
 
-  async function handleSave(
-    e: React.FormEvent
-  ) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-
-    const finalBrand =
-      brand === "Other"
-        ? customBrand
-        : brand;
-
-    if (
-      !size ||
-      !finalBrand ||
-      unitPrice <= 0
-    ) {
-      setError(
-        "Size, brand and price are required."
-      );
-      return;
+    const finalBrand = brand === "Other" ? customBrand : brand;
+    if (!size || !finalBrand || unitPrice <= 0) {
+      setError("Size, brand and price are required."); return;
     }
-
-    setSaving(true);
-    setError("");
-
-    const finalName =
-      name || buildName();
-
-    const sku =
-      existing?.sku ?? buildSku();
-
+    setSaving(true); setError("");
+    const finalName = name || buildName();
+    const sku = existing?.sku ?? buildSku();
     try {
       if (existing) {
-        await updateDoc(
-          doc(productsCol, existing.id),
-          {
-            name: finalName,
-            brand: finalBrand,
-            size,
-            type,
-            unitPrice,
-            updatedAt: serverTimestamp(),
-          }
-        );
+        await updateDoc(doc(productsCol, existing.id), {
+          name: finalName, brand: finalBrand, size, type, unitPrice,
+          updatedAt: serverTimestamp(),
+        });
       } else {
-        const productRef = doc(productsCol);
-
-        await setDoc(productRef, {
-          id: productRef.id,
-          sku,
-          name: finalName,
-          brand: finalBrand,
-          type,
-          size,
-          unitPrice,
-          active: true,
-          createdAt: serverTimestamp(),
+        await addDoc(productsCol, {
+          sku, name: finalName, brand: finalBrand, type, size,
+          unitPrice, active: true, createdAt: serverTimestamp(),
         });
       }
-
       onClose();
-    } catch (err: any) {
-      setError(
-        err?.message ??
-          "Failed to save product."
-      );
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setSaving(false); }
   }
 
   return (
     <Modal
-      title={
-        existing
-          ? "Edit product"
-          : "Add new product"
-      }
+      title={existing ? "Edit product" : "Add new product"}
       onClose={onClose}
       size="md"
       footer={
-        <div className="flex w-full gap-3">
-          <Button
-            variant="secondary"
-            className="min-h-12 flex-1"
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-          >
+        <div className="flex gap-3">
+          <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>
             Cancel
           </Button>
-
-          <Button
-            className="min-h-12 flex-1"
-            type="submit"
-            form="product-form"
-            loading={saving}
-          >
-            {existing
-              ? "Save changes"
-              : "Add product"}
+          <Button className="flex-1" type="submit" form="product-form" loading={saving}>
+            {existing ? "Save changes" : "Add product"}
           </Button>
         </div>
       }
     >
-      <form
-        id="product-form"
-        onSubmit={handleSave}
-        className="space-y-4"
-      >
-        {/* Tyre type */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            Tyre type *
-          </label>
+      <form id="product-form" onSubmit={handleSave} className="space-y-4">
 
-          <div className="flex gap-2">
-            {(
-              [
-                "bike",
-                "three_wheeler",
-              ] as TyreType[]
-            ).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
+        {/* Vehicle type */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Vehicle type *
+          </label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {TYRE_TYPES.map(t => (
+              <button key={t.value} type="button" onClick={() => setType(t.value)}
                 className={cn(
-                  "min-h-11 flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
-                  type === t
+                  "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                  type === t.value
                     ? "border-brand-400 bg-brand-50 text-brand-800"
-                    : "border-gray-200 bg-white text-gray-600"
-                )}
-              >
-                {t === "bike"
-                  ? "🏍 Bike"
-                  : "🛺 3-Wheeler"}
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                )}>
+                <span className="text-base flex-shrink-0">{t.emoji}</span>
+                <span className="truncate text-xs">{t.label}</span>
               </button>
             ))}
           </div>
@@ -698,33 +603,19 @@ function ProductModal({
 
         {/* Tube type */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            Tube type *
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Construction *
           </label>
-
           <div className="flex gap-2">
-            {(
-              [
-                "tube_type",
-                "tubeless",
-              ] as const
-            ).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() =>
-                  setTubeType(t)
-                }
+            {TUBE_TYPES.map(t => (
+              <button key={t.value} type="button" onClick={() => setTubeType(t.value as any)}
                 className={cn(
-                  "min-h-11 flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
-                  tubeType === t
+                  "flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors",
+                  tubeType === t.value
                     ? "border-brand-400 bg-brand-50 text-brand-800"
-                    : "border-gray-200 bg-white text-gray-600"
-                )}
-              >
-                {t === "tube_type"
-                  ? "Tube type"
-                  : "Tubeless"}
+                    : "border-gray-200 text-gray-600"
+                )}>
+                {t.label}
               </button>
             ))}
           </div>
@@ -732,98 +623,80 @@ function ProductModal({
 
         {/* Brand */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            Brand *
-          </label>
-
+          <label className="text-sm font-medium text-gray-700 mb-2 block">Brand *</label>
           <div className="flex flex-wrap gap-2">
-            {BRANDS.map((b) => (
-              <button
-                key={b}
-                type="button"
-                onClick={() => setBrand(b)}
+            {BRANDS.map(b => (
+              <button key={b} type="button" onClick={() => setBrand(b)}
                 className={cn(
-                  "min-h-10 rounded-xl border px-4 py-2 text-sm font-medium transition-colors",
+                  "rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors",
                   brand === b
                     ? "border-brand-400 bg-brand-50 text-brand-800"
-                    : "border-gray-200 bg-white text-gray-600"
-                )}
-              >
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                )}>
                 {b}
               </button>
             ))}
           </div>
-
           {brand === "Other" && (
             <input
               value={customBrand}
-              onChange={(e) =>
-                setCustom(e.target.value)
-              }
+              onChange={e => setCustom(e.target.value)}
               placeholder="Enter brand name"
-              className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none"
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
             />
           )}
         </div>
 
-        <Input
-          label="Tyre size & Pattern *"
-          placeholder={
-            type === "bike"
-              ? "e.g. 2.75-17 SECURA SPORT (R)"
-              : "e.g. 400-8 BULAND"
-          }
-          value={size}
-          onChange={(e) =>
-            setSize(e.target.value)
-          }
-        />
-
+        {/* Size */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Display name{" "}
-            <span className="text-xs font-normal text-gray-400">
-              (auto-filled)
-            </span>
-          </label>
+          <Input
+            label="Tyre size *"
+            placeholder={selectedTypeInfo?.sizes ?? "e.g. 2.75-17"}
+            value={size}
+            onChange={e => setSize(e.target.value)}
+          />
+          {selectedTypeInfo && (
+            <p className="text-xs text-gray-400 mt-1">
+              {selectedTypeInfo.emoji} {selectedTypeInfo.label} — {selectedTypeInfo.sizes}
+            </p>
+          )}
+        </div>
 
+        {/* Display name */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">
+            Display name
+            <span className="text-gray-400 font-normal text-xs ml-1">(auto-filled)</span>
+          </label>
           <input
-            value={
-              name || buildName()
-            }
-            onChange={(e) =>
-              setName(e.target.value)
-            }
-            className="min-h-11 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none"
+            value={name || buildName()}
+            onChange={e => setName(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
           />
         </div>
 
+        {/* Unit price */}
         <Input
           label="Unit price (Rs) *"
           type="number"
           min={1}
           value={unitPrice || ""}
-          onChange={(e) =>
-            setPrice(
-              parseFloat(e.target.value) || 0
-            )
-          }
-          placeholder="e.g. 2800"
+          onChange={e => setPrice(parseFloat(e.target.value) || 0)}
+          placeholder="e.g. 12500"
         />
 
+        {/* SKU preview */}
         {!existing && (
-          <div className="rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
-            SKU:{" "}
-            <span className="break-all font-mono font-medium text-gray-700">
+          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            SKU preview:
+            <span className="font-mono font-medium text-gray-700 ml-1 break-all">
               {buildSku()}
             </span>
           </div>
         )}
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>
         )}
       </form>
     </Modal>
@@ -941,7 +814,7 @@ function AddStockModal({
     } catch (err: any) {
       setError(
         err?.message ??
-          "Failed to add stock."
+        "Failed to add stock."
       );
     } finally {
       setSaving(false);
@@ -1239,7 +1112,7 @@ function TransferModal({
     } catch (err: any) {
       setError(
         err?.message ??
-          "Transfer failed."
+        "Transfer failed."
       );
     } finally {
       setSub(false);
@@ -1380,11 +1253,8 @@ export default function InventoryPage() {
     setSearch,
   ] = useState("");
 
-  const [
-    tyreTab,
-    setTyreTab,
-  ] = useState<
-    "all" | "bike" | "three_wheeler"
+  const [tyreTab, setTyreTab] = useState<
+    "all" | "bike" | "three_wheeler" | "car" | "suv" | "van" | "truck" | "bus" | "tractor" | "radial"
   >("all");
 
   const [
@@ -1528,28 +1398,15 @@ export default function InventoryPage() {
      FILTER STOCK
   --------------------------------------------------------- */
 
-  const filteredStock =
-    stock.filter((s) => {
-      const searchValue =
-        search.toLowerCase();
+  const filteredStock = stock.filter(s => {
+    const matchSearch =
+      s.productName.toLowerCase().includes(search.toLowerCase()) ||
+      s.productSku?.toLowerCase().includes(search.toLowerCase());
+    const matchTab = tyreTab === "all" || s.productType === tyreTab;
+    return matchSearch && matchTab;
+  });
 
-      const matchSearch =
-        s.productName
-          .toLowerCase()
-          .includes(searchValue) ||
-        s.productSku
-          ?.toLowerCase()
-          .includes(searchValue);
 
-      const matchTab =
-        tyreTab === "all" ||
-        s.productType === tyreTab;
-
-      return (
-        matchSearch &&
-        matchTab
-      );
-    });
 
   /* ---------------------------------------------------------
      GROUP STOCK BY WAREHOUSE
@@ -1651,20 +1508,20 @@ export default function InventoryPage() {
 
             {activeTab ===
               "products" && (
-              <Button
-                size="sm"
-                onClick={() =>
-                  setShowAddProduct(true)
-                }
-                className="gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    setShowAddProduct(true)
+                  }
+                  className="gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
 
-                <span className="hidden sm:inline">
-                  Add product
-                </span>
-              </Button>
-            )}
+                  <span className="hidden sm:inline">
+                    Add product
+                  </span>
+                </Button>
+              )}
           </div>
         )}
       </div>
@@ -1721,74 +1578,65 @@ export default function InventoryPage() {
         <>
           {lowStockItems.length >
             0 && (
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
 
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-amber-800">
-                  {
-                    lowStockItems.length
-                  }{" "}
-                  item
-                  {lowStockItems.length >
-                  1
-                    ? "s"
-                    : ""}{" "}
-                  low on stock
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-amber-800">
+                    {
+                      lowStockItems.length
+                    }{" "}
+                    item
+                    {lowStockItems.length >
+                      1
+                      ? "s"
+                      : ""}{" "}
+                    low on stock
+                  </p>
 
-                <p className="mt-0.5 text-xs text-amber-700">
-                  {lowStockItems
-                    .map(
-                      (s) =>
-                        s.productName
-                    )
-                    .join(", ")}
-                </p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    {lowStockItems
+                      .map(
+                        (s) =>
+                          s.productName
+                      )
+                      .join(", ")}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Filters */}
-          <div className="mb-4 flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <Dropdown
-                value={warehouseId}
-                onChange={
-                  setWarehouseId
-                }
-                options={WAREHOUSES}
-              />
+          {/* Tyre type filter */}
+          <div className="mb-4 flex gap-2 items-center">
+            <div className="flex-1 min-w-0">
+              <Dropdown value={warehouseId} onChange={setWarehouseId} options={WAREHOUSES} />
             </div>
-
-            <div className="flex flex-shrink-0 rounded-xl border border-gray-200 bg-white text-sm">
-              {(
-                [
-                  "all",
-                  "bike",
-                  "three_wheeler",
-                ] as const
-              ).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() =>
-                    setTyreTab(t)
-                  }
-                  className={cn(
-                    "px-3 py-2 font-medium transition-colors",
-                    tyreTab === t
-                      ? "bg-brand-700 text-white"
-                      : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  {t === "all"
-                    ? "All"
-                    : t === "bike"
-                    ? "Bike"
-                    : "3W"}
-                </button>
-              ))}
+            <div className="overflow-x-auto scrollbar-none">
+              <div className="flex gap-1 min-w-max">
+                {[
+                  { value: "all", label: "All" },
+                  { value: "bike", label: "🏍 Bike" },
+                  { value: "three_wheeler", label: "🛺 3W" },
+                  { value: "car", label: "🚗 Car" },
+                  { value: "suv", label: "🚙 SUV" },
+                  { value: "van", label: "🚐 Van" },
+                  { value: "truck", label: "🚛 Truck" },
+                  { value: "bus", label: "🚌 Bus" },
+                  { value: "tractor", label: "🚜 Trac" },
+                  { value: "radial", label: "⭕ Radial" },
+                ].map(t => (
+                  <button key={t.value} onClick={() => setTyreTab(t.value as any)}
+                    className={cn(
+                      "px-3 py-2 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap flex-shrink-0",
+                      tyreTab === t.value
+                        ? "bg-brand-600 text-white border-brand-600"
+                        : "bg-white text-gray-500 border-gray-200 hover:text-gray-700"
+                    )}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1800,7 +1648,7 @@ export default function InventoryPage() {
 
           {!stockLoading &&
             filteredStock.length ===
-              0 && (
+            0 && (
               <Card className="flex flex-col items-center py-12 text-center">
                 <Package className="mb-3 h-10 w-10 text-gray-300" />
 
@@ -1932,153 +1780,151 @@ export default function InventoryPage() {
 
       {activeTab ===
         "products" && (
-        <>
-          {prodLoading && (
-            <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
-            </div>
-          )}
-
-          {!prodLoading &&
-            filteredProducts.length ===
-              0 && (
-              <Card className="flex flex-col items-center py-12 text-center">
-                <Package className="mb-3 h-10 w-10 text-gray-300" />
-
-                <p className="text-sm text-gray-500">
-                  No products yet
-                </p>
-
-                {canEdit && (
-                  <Button
-                    size="sm"
-                    className="mt-4"
-                    onClick={() =>
-                      setShowAddProduct(
-                        true
-                      )
-                    }
-                  >
-                    Add first product
-                  </Button>
-                )}
-              </Card>
+          <>
+            {prodLoading && (
+              <div className="flex justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
+              </div>
             )}
 
-          {!prodLoading &&
-            filteredProducts.length >
+            {!prodLoading &&
+              filteredProducts.length ===
               0 && (
-              <Card padding={false}>
-                {filteredProducts.map(
-                  (p, i) => (
-                    <div
-                      key={p.id}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-3",
-                        i <
-                          filteredProducts.length -
-                            1 &&
-                          "border-b border-gray-50"
-                      )}
+                <Card className="flex flex-col items-center py-12 text-center">
+                  <Package className="mb-3 h-10 w-10 text-gray-300" />
+
+                  <p className="text-sm text-gray-500">
+                    No products yet
+                  </p>
+
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      className="mt-4"
+                      onClick={() =>
+                        setShowAddProduct(
+                          true
+                        )
+                      }
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="whitespace-normal break-words text-sm font-medium leading-5 text-gray-900">
-                            {p.name}
-                          </p>
+                      Add first product
+                    </Button>
+                  )}
+                </Card>
+              )}
 
-                          <Badge
-                            variant={
-                              p.type ===
-                              "bike"
-                                ? "info"
-                                : "default"
-                            }
-                          >
-                            {p.type ===
-                            "bike"
-                              ? "Bike"
-                              : "3-Wheeler"}
-                          </Badge>
+            {!prodLoading &&
+              filteredProducts.length >
+              0 && (
+                <Card padding={false}>
+                  {filteredProducts.map(
+                    (p, i) => (
+                      <div
+                        key={p.id}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3",
+                          i <
+                          filteredProducts.length -
+                          1 &&
+                          "border-b border-gray-50"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="whitespace-normal break-words text-sm font-medium leading-5 text-gray-900">
+                              {p.name}
+                            </p>
 
-                          {!p.active && (
-                            <Badge variant="danger">
-                              Inactive
+                            <Badge variant={
+                              p.type === "bike" ? "info" :
+                                p.type === "three_wheeler" ? "default" :
+                                  p.type === "car" ? "success" :
+                                    p.type === "suv" ? "success" :
+                                      p.type === "van" ? "success" :
+                                        "default"
+                            }>
+                              {TYRE_TYPES.find(t => t.value === p.type)?.emoji}{" "}
+                              {TYRE_TYPES.find(t => t.value === p.type)?.label ?? p.type}
                             </Badge>
-                          )}
+
+                            {!p.active && (
+                              <Badge variant="danger">
+                                Inactive
+                              </Badge>
+                            )}
+                          </div>
+
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {p.sku} ·{" "}
+                            {p.brand} · Rs{" "}
+                            {p.unitPrice?.toLocaleString()}
+                          </p>
                         </div>
 
-                        <p className="mt-0.5 text-xs text-gray-400">
-                          {p.sku} ·{" "}
-                          {p.brand} · Rs{" "}
-                          {p.unitPrice?.toLocaleString()}
-                        </p>
-                      </div>
-
-                      {canEdit && (
-                        <div className="flex flex-shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditProduct(
-                                p
-                              )
-                            }
-                            title="Edit"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:bg-gray-50"
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-gray-500" />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleProductActive(
-                                p
-                              )
-                            }
-                            title={
-                              p.active
-                                ? "Deactivate"
-                                : "Activate"
-                            }
-                            className={cn(
-                              "flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
-                              p.active
-                                ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50"
-                                : "border-green-300 bg-green-50"
-                            )}
-                          >
-                            {p.active ? (
-                              <X className="h-3.5 w-3.5 text-gray-400" />
-                            ) : (
-                              <Check className="h-3.5 w-3.5 text-green-600" />
-                            )}
-                          </button>
-
-                          {isAdmin && (
+                        {canEdit && (
+                          <div className="flex flex-shrink-0 items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() =>
-                                setDeleteProduct(
+                                setEditProduct(
                                   p
                                 )
                               }
-                              title="Delete"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-red-300 hover:bg-red-50"
+                              title="Edit"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:bg-gray-50"
                             >
-                              <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                              <Pencil className="h-3.5 w-3.5 text-gray-500" />
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                )}
-              </Card>
-            )}
-        </>
-      )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleProductActive(
+                                  p
+                                )
+                              }
+                              title={
+                                p.active
+                                  ? "Deactivate"
+                                  : "Activate"
+                              }
+                              className={cn(
+                                "flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
+                                p.active
+                                  ? "border-gray-200 hover:border-amber-300 hover:bg-amber-50"
+                                  : "border-green-300 bg-green-50"
+                              )}
+                            >
+                              {p.active ? (
+                                <X className="h-3.5 w-3.5 text-gray-400" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              )}
+                            </button>
+
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDeleteProduct(
+                                    p
+                                  )
+                                }
+                                title="Delete"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-red-300 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-gray-400" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </Card>
+              )}
+          </>
+        )}
 
       {/* ======================================================
           MODALS

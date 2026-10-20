@@ -3,7 +3,7 @@ import { Timestamp } from "firebase/firestore";
 // ── Enums ────────────────────────────────────────────────
 
 export type UserRole = "admin" | "sales_rep";
-export type TyreType = "bike" | "three_wheeler";
+export type TyreType = "bike" | "three_wheeler"| "car" | "suv" | "van"| "bus"| "tractor"| "radial";;
 export type PaymentType = "cash" | "cheque_15d" | "cheque_30d" | "cheque_45d" | "cheque_60d";
 export type InvoiceStatus = "draft" | "confirmed" | "delivered" | "cancelled";
 export type ChequeStatus = "pending" | "deposited" | "bounced" | "cancelled";
