@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { cn, formatDate } from "@/lib/utils";
-import { Plus, Truck, ChevronRight, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Plus, Truck, ChevronRight } from "lucide-react";
 import type { Dispatch, DispatchStatus } from "@/types";
 
 const STATUS_META: Record<DispatchStatus, { label: string; variant: "default"|"info"|"success"|"danger"|"warning" }> = {

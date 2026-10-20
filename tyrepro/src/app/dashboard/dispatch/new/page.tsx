@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  addDoc, serverTimestamp, Timestamp, doc, setDoc,
+import {serverTimestamp, Timestamp, doc, setDoc,
 } from "firebase/firestore";
 import { dispatchesCol, dispatchStopsCol } from "@/lib/firestore-collections";
 import { useAuth } from "@/hooks/useAuth";

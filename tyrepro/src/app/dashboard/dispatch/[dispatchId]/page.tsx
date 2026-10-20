@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  doc, getDoc, onSnapshot, updateDoc,
+  doc, onSnapshot, updateDoc,
   serverTimestamp, query, orderBy,
 } from "firebase/firestore";
 import { dispatchesCol, dispatchStopsCol } from "@/lib/firestore-collections";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { cn, formatDate } from "@/lib/utils";
 import {
   ArrowLeft, Truck, CheckCircle, XCircle,
-  Clock, MapPin, Package, AlertTriangle,
+  Clock, Package
 } from "lucide-react";
 import Link from "next/link";
 import type { Dispatch, DispatchStop, DispatchStatus } from "@/types";
