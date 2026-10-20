@@ -552,8 +552,9 @@ function ProductModal({ existing, onClose }: { existing?: Product; onClose: () =
           updatedAt: serverTimestamp(),
         });
       } else {
-        await addDoc(productsCol, {
-          sku, name: finalName, brand: finalBrand, type, size,
+        const productRef = doc(productsCol);
+        await setDoc(productRef, {
+          id: productRef.id, sku, name: finalName, brand: finalBrand, type, size,
           unitPrice, active: true, createdAt: serverTimestamp(),
         });
       }
