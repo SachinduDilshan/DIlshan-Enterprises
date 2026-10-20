@@ -440,7 +440,7 @@ function StockRow({
                 type="button"
                 onClick={() => setAdjustMode("add")}
                 title="Add stock"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-600 bg-indigo-600 px-3 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:ring-offset-1"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-green-600 bg-green-600 px-3 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:border-green-700 hover:bg-green-700 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-1"
               >
                 <Plus className="h-3.5 w-3.5 text-white" />
                 <span className="hidden sm:inline">Add</span>
@@ -452,7 +452,7 @@ function StockRow({
                 onClick={() => setAdjustMode("remove")}
                 title="Remove stock"
                 disabled={isOut}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-800 shadow-sm transition-all duration-200 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-400 px-3 text-xs font-medium text-amber-800 shadow-sm transition-all duration-200 hover:border-amber-400 hover:bg-amber-500 hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Minus className="h-3.5 w-3.5 text-amber-700" />
                 <span className="hidden sm:inline">Remove</span>
