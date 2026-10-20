@@ -1,4 +1,3 @@
-import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 // @ts-ignore: CSS modules declaration not found for side-effect import
 import "./globals.css";
