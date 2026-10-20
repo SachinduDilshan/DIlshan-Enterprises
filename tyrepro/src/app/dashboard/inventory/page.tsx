@@ -440,7 +440,7 @@ function StockRow({
                 type="button"
                 onClick={() => setAdjustMode("add")}
                 title="Add stock"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-green-600 bg-green-600 px-3 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:border-green-700 hover:bg-green-700 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-1"
+                className="inline-flex h-6 items-center gap-1.5 rounded-lg border border-green-600 bg-green-600 px-3 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:border-green-700 hover:bg-green-700 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-1"
               >
                 <Plus className="h-3.5 w-3.5 text-white" />
                 <span className="hidden sm:inline">Add</span>
@@ -452,7 +452,7 @@ function StockRow({
                 onClick={() => setAdjustMode("remove")}
                 title="Remove stock"
                 disabled={isOut}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-400 px-3 text-xs font-medium text-amber-800 shadow-sm transition-all duration-200 hover:border-amber-400 hover:bg-amber-500 hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-6 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-400 px-3 text-xs font-medium text-amber-800 shadow-sm transition-all duration-200 hover:border-amber-400 hover:bg-amber-500 hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Minus className="h-3.5 w-3.5 text-amber-700" />
                 <span className="hidden sm:inline">Remove</span>
@@ -468,9 +468,9 @@ function StockRow({
               onClick={() => onDelete(item)}
               title="Delete stock record"
               aria-label={`Delete stock record for ${item.productName}`}
-             className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-1"
+             className="flex h-6 w-6 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-1"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
 
