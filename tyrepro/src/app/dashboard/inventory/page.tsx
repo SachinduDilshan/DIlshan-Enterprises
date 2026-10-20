@@ -408,59 +408,72 @@ function StockRow({
           />
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <div className="min-w-[40px] text-right">
+        {/* Stock quantity and actions */}
+        <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+
+          {/* Stock quantity */}
+          <div className="min-w-[58px] text-right">
             <div
               className={cn(
-                "text-lg font-semibold",
-                isLow
-                  ? "text-red-600"
-                  : "text-gray-900"
+                "text-xl font-semibold tabular-nums tracking-tight",
+                isOut
+                  ? "text-gray-400"
+                  : isLow
+                    ? "text-rose-600"
+                    : "text-gray-900"
               )}
             >
               {item.qty}
             </div>
 
-            <div className="text-xs text-gray-400">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
               units
             </div>
           </div>
 
+          {/* Stock adjustment actions */}
           {canEdit && (
-            <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 border-l border-gray-100 pl-3 sm:pl-4">
+
+              {/* Add stock */}
               <button
                 type="button"
                 onClick={() => setAdjustMode("add")}
                 title="Add stock"
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-green-200 bg-green-50 transition-colors hover:bg-green-100"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-200"
               >
-                <Plus className="h-3.5 w-3.5 text-green-700" />
+                <Plus className="h-3.5 w-3.5 text-gray-500" />
+                <span className="hidden sm:inline">Add</span>
               </button>
 
+              {/* Remove stock */}
               <button
                 type="button"
-                onClick={() =>
-                  setAdjustMode("remove")
-                }
+                onClick={() => setAdjustMode("remove")}
                 title="Remove stock"
                 disabled={isOut}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Minus className="h-3.5 w-3.5 text-red-700" />
+                <Minus className="h-3.5 w-3.5 text-gray-500" />
+                <span className="hidden sm:inline">Remove</span>
               </button>
+
             </div>
           )}
 
+          {/* Delete stock record */}
           {canEdit && (
             <button
               type="button"
               onClick={() => onDelete(item)}
               title="Delete stock record"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-red-300 hover:bg-red-50"
+              aria-label={`Delete stock record for ${item.productName}`}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200"
             >
-              <Trash2 className="h-4 w-4 text-gray-400" />
+              <Trash2 className="h-4 w-4" />
             </button>
           )}
+
         </div>
       </div>
 
