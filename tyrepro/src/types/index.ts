@@ -11,22 +11,6 @@ export type TransferStatus = "pending" | "in_transit" | "completed" | "cancelled
 export type DispatchStatus = "planned" | "in_progress" | "completed" | "cancelled";
 export type DispatchStopStatus = "pending" | "delivered" | "skipped";
 
-/**
- * UC Return status lifecycle:
- *
- *  approved
- *    → new tyre given to shop instantly (gaveTyreToShop: true)
- *    → physical tyre collected from shop (tyreReceivedFromShop: true)
- *
- *  sent_to_supplier
- *    → defective tyre physically sent to CEAT (sentToSupplierAt recorded)
- *
- *  awaiting_replacement
- *    → waiting for CEAT to send a new tyre back
- *
- *  closed
- *    → CEAT sent replacement, stock incremented (replacementReceivedAt recorded)
- */
 export type UCReturnStatus =
   | "approved"
   | "sent_to_supplier"
