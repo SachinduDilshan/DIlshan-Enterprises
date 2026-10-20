@@ -440,9 +440,9 @@ function StockRow({
                 type="button"
                 onClick={() => setAdjustMode("add")}
                 title="Add stock"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-600 bg-indigo-600 px-3 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:ring-offset-1"
               >
-                <Plus className="h-3.5 w-3.5 text-gray-500" />
+                <Plus className="h-3.5 w-3.5 text-white" />
                 <span className="hidden sm:inline">Add</span>
               </button>
 
@@ -452,9 +452,9 @@ function StockRow({
                 onClick={() => setAdjustMode("remove")}
                 title="Remove stock"
                 disabled={isOut}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-800 shadow-sm transition-all duration-200 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Minus className="h-3.5 w-3.5 text-gray-500" />
+                <Minus className="h-3.5 w-3.5 text-amber-700" />
                 <span className="hidden sm:inline">Remove</span>
               </button>
 
@@ -468,7 +468,7 @@ function StockRow({
               onClick={() => onDelete(item)}
               title="Delete stock record"
               aria-label={`Delete stock record for ${item.productName}`}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200"
+             className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-1"
             >
               <Trash2 className="h-4 w-4" />
             </button>
