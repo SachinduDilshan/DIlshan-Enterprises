@@ -1,35 +1,36 @@
 import { cn } from "@/lib/utils";
 
-interface CardProps {
-  children:   React.ReactNode;
-  className?: string;
-  padding?:   boolean;
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  padding?: boolean;
 }
 
-export function Card({ children, className, padding = true }: CardProps) {
+export function Card({ children, className, padding = true, ...rest }: CardProps) {
   return (
-    <div className={cn(
-      "rounded-2xl border border-gray-100 bg-white w-full min-w-0 max-w-full",
-      padding && "p-4",
-      className
-    )}>
+    <div
+      className={cn(
+        "w-full min-w-0 max-w-full rounded-xl border border-gray-200 bg-white",
+        padding && "p-4",
+        className
+      )}
+      {...rest}
+    >
       {children}
     </div>
   );
 }
 
 interface CardHeaderProps {
-  title:     string;
+  title: string;
   subtitle?: string;
-  action?:   React.ReactNode;
+  action?: React.ReactNode;
 }
 
 export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-3 gap-2 min-w-0">
+    <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-900 truncate">{title}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5 truncate">{subtitle}</p>}
+        <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
+        {subtitle && <p className="mt-0.5 truncate text-xs text-gray-500">{subtitle}</p>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>

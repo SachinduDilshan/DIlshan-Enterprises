@@ -1,138 +1,83 @@
 "use client";
 
 import { useState } from "react";
+import { BarChart3, CreditCard, Package, RotateCcw, Store } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
-import {
-  BarChart3,
-  FileText,
-  Package,
-  RotateCcw,
-  CreditCard,
-} from "lucide-react";
-
+import SalesReport from "@/components/reports/SalesReport";
+import ShopSalesReport from "@/components/reports/ShopSalesReport";
+import PaymentsReport from "@/components/reports/PaymentsReport";
 import StockMovementReport from "@/components/reports/StockMovementReport";
 import UCReturnsReport from "@/components/reports/UCReturnsReport";
-import ShopSalesReport from "@/components/reports/ShopSalesReport";
-import SalesReport from "@/components/reports/SalesReport";
-import PaymentsReport from "@/components/reports/PaymentsReport";
 
-const TABS = [
-  {
-    key: "daily",
-    label: "Sales Report",
-    icon: BarChart3,
-  },
-  {
-    key: "shop",
-    label: "Shop-wise",
-    icon: FileText,
-  },
-  {
-    key: "payments",
-    label: "Payments",
-    icon: CreditCard,
-  },
-  {
-    key: "stock",
-    label: "Stock",
-    icon: Package,
-  },
-  {
-    key: "uc",
-    label: "UC Returns",
-    icon: RotateCcw,
-  },
-] as const;
+type TabKey = "sales" | "shops" | "payments" | "stock" | "uc";
 
-
-
-type TabKey = (typeof TABS)[number]["key"];
+const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
+  { key: "sales",    label: "Sales",      icon: BarChart3  },
+  { key: "shops",    label: "By shop",    icon: Store      },
+  { key: "payments", label: "Payments",   icon: CreditCard },
+  { key: "stock",    label: "Stock",      icon: Package    },
+  { key: "uc",       label: "UC returns", icon: RotateCcw  },
+];
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState<TabKey>("daily");
+  const { appUser } = useAuth();
+  const [tab, setTab] = useState<TabKey>("sales");
+
+  if (String(appUser?.role) === "driver") {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 text-sm text-gray-600">
+        Reports are not available for your role.
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="
-        w-full
-        max-w-full
-        px-3
-        py-4
-        md:mx-auto
-        md:max-w-3xl
-        md:p-6
-      "
-    >
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
-      <div className="mb-4 px-1">
-        <h1 className="text-lg font-medium text-gray-900 md:text-xl">
-          REPORTS
-        </h1>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Reports"
+        description="Sales, payments, stock and returns for Dilshan Enterprises"
+      />
 
-        <p className="mt-0.5 text-xs text-gray-500 md:text-sm">
-          Business overview
-        </p>
-      </div>
-
-      {/* =====================================================
-          REPORT TABS
-      ===================================================== */}
-      <div className="mb-4 w-full overflow-x-auto scrollbar-none">
+      {/* Section tabs */}
+      <div className="mb-6 border-b border-gray-200">
         <div
-          className="
-            flex
-            w-max
-            snap-x
-            snap-mandatory
-            gap-2
-            pb-2
-          "
+          role="tablist"
+          aria-label="Report sections"
+          className="scrollbar-none -mb-px -mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0"
         >
-          {TABS.map(
-            ({ key, label, icon: Icon }) => {
-              const active = tab === key;
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTab(key)}
-                  className={cn(
-                    "flex shrink-0 snap-start items-center gap-1.5",
-                    "whitespace-nowrap",
-                    "rounded-xl",
-                    "px-3.5 py-2",
-                    "text-xs font-medium md:text-sm",
-                    "transition-colors",
-                    "active:scale-[0.98]",
-                    active
-                      ? "bg-brand-800 text-white shadow-sm"
-                      : "border border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-
-                  {label}
-                </button>
-              );
-            }
-          )}
+          {TABS.map(t => {
+            const active = tab === t.key;
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "flex flex-shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors",
+                  active
+                    ? "border-brand-600 text-gray-900"
+                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-
-      <div className="w-full max-w-full">
-        {tab === "daily" && <SalesReport />}
-
-        {tab === "shop" && <ShopSalesReport />}
-
+      <div role="tabpanel">
+        {tab === "sales"    && <SalesReport />}
+        {tab === "shops"    && <ShopSalesReport />}
         {tab === "payments" && <PaymentsReport />}
-
-        {tab === "stock" && <StockMovementReport />}
-
-        {tab === "uc" && <UCReturnsReport />}
+        {tab === "stock"    && <StockMovementReport />}
+        {tab === "uc"       && <UCReturnsReport />}
       </div>
     </div>
   );
