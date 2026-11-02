@@ -1,86 +1,100 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  collection, query, orderBy, limit, getDocs,
-  where, startAfter, QueryDocumentSnapshot, doc, deleteDoc,
+  collection, deleteDoc, doc, getDocs, limit, orderBy,
+  query, startAfter, where,
 } from "firebase/firestore";
+import type { QueryConstraint, QueryDocumentSnapshot } from "firebase/firestore";
+import { ChevronRight, FileText, Plus, Search, Trash2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { formatLKR, formatDate, paymentLabel } from "@/lib/utils";
-import { Plus, FileText, ChevronRight, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { cn, formatDate, formatLKR } from "@/lib/utils";
 import type { Invoice, InvoiceStatus } from "@/types";
 
 const PAGE_SIZE = 20;
 
-const STATUS_OPTS = [
-  { value: "", label: "All" },
+const STATUS_FILTERS = [
+  { value: "",          label: "All"       },
   { value: "confirmed", label: "Confirmed" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
 
-const statusBadge: Record<InvoiceStatus, "success" | "info" | "danger" | "default"> = {
+const STATUS_BADGE: Record<InvoiceStatus, "success" | "info" | "danger" | "default"> = {
   confirmed: "info",
   delivered: "success",
   cancelled: "danger",
   draft: "default",
 };
 
+function paymentText(type?: string): string {
+  if (!type) return "-";
+  if (type === "cash") return "Cash";
+  if (type === "card") return "Card";
+  if (type === "pending") return "Pending";
+  if (type.startsWith("cheque_")) return type.replace("cheque_", "Cheque ").replace(/d$/, " days");
+  return type;
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 export default function InvoicesPage() {
   const { appUser } = useAuth();
+  const isAdmin = appUser?.role === "admin";
+
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [toDelete, setToDelete] = useState<Invoice | null>(null);
 
-  const isAdmin = appUser?.role === "admin";
+  // Ignore results from a request that has been replaced by a newer one
+  const requestId = useRef(0);
 
   async function fetchInvoices(reset = false) {
+    const id = ++requestId.current;
     setLoading(true);
+    setError("");
+
     try {
-      let q = query(
-        collection(db, "invoices"),
-        orderBy("invoiceDate", "desc"),
-        limit(PAGE_SIZE)
-      );
-      if (statusFilter) {
-        q = query(
-          collection(db, "invoices"),
-          where("status", "==", statusFilter),
-          orderBy("invoiceDate", "desc"),
-          limit(PAGE_SIZE)
-        );
-      }
-      if (!reset && lastDoc) {
-        q = query(
-          collection(db, "invoices"),
-          orderBy("invoiceDate", "desc"),
-          startAfter(lastDoc),
-          limit(PAGE_SIZE)
-        );
-      }
-      const snap = await getDocs(q);
-      const docs = snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id } as Invoice; });
+      const constraints: QueryConstraint[] = [];
+      if (statusFilter) constraints.push(where("status", "==", statusFilter));
+      constraints.push(orderBy("invoiceDate", "desc"));
+      if (!reset && lastDoc) constraints.push(startAfter(lastDoc));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "invoices"), ...constraints));
+      if (id !== requestId.current) return;
+
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Invoice);
       setInvoices(reset ? docs : prev => [...prev, ...docs]);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Invoices load error:", err);
+      if (id === requestId.current) {
+        setError("Could not load invoices. Check your connection and try again.");
+      }
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }
 
-  useEffect(() => { fetchInvoices(true); }, [statusFilter]);
+  useEffect(() => {
+    fetchInvoices(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   async function handleDelete(invoice: Invoice) {
     await deleteDoc(doc(collection(db, "invoices"), invoice.id));
@@ -88,110 +102,229 @@ export default function InvoicesPage() {
     setToDelete(null);
   }
 
-  const displayed = search
-    ? invoices.filter(inv =>
-      inv.shopName.toLowerCase().includes(search.toLowerCase()) ||
-      inv.invoiceNo.toLowerCase().includes(search.toLowerCase())
-    )
-    : invoices;
+  /* ---------------- derived ---------------- */
+
+  const displayed = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return invoices;
+    return invoices.filter(
+      inv =>
+        inv.shopName?.toLowerCase().includes(q) ||
+        inv.invoiceNo?.toLowerCase().includes(q)
+    );
+  }, [invoices, search]);
+
+  const total = useMemo(
+    () =>
+      displayed
+        .filter(i => i.status !== "cancelled")
+        .reduce((s, i) => s + (Number(i.totalAmount) || 0), 0),
+    [displayed]
+  );
+
+  const newInvoice = (
+    <Link
+      href="/dashboard/invoices/new"
+      className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 sm:h-10"
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      New invoice
+    </Link>
+  );
+
+  const firstLoad = loading && invoices.length === 0;
+  const hasFilters = search.trim() !== "" || statusFilter !== "";
+
+  /* ---------------- render ---------------- */
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium text-gray-900">INVOICES</h1>
-          <p className="text-sm text-gray-500">All sales records</p>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Invoices"
+        description="Every sale, newest first"
+        actions={newInvoice}
+      />
+
+      {/* Toolbar */}
+      <div className="mb-4 space-y-3">
+        <div className="relative w-full sm:max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search shop or invoice number"
+            aria-label="Search invoices"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-10"
+          />
         </div>
-        <Link href="/dashboard/invoices/new">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" /> New invoice
-          </Button>
-        </Link>
+
+        <div
+          className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0"
+          role="group"
+          aria-label="Filter by status"
+        >
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={statusFilter === f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={cn(
+                "inline-flex h-10 flex-shrink-0 items-center whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors",
+                statusFilter === f.value
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <Input
-          placeholder="Search shop or invoice no..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1"
-        />
-        <Select
-          value={statusFilter}
-          onChange={e => setStatus(e.target.value)}
-          options={STATUS_OPTS}
-          className="w-40"
-        />
-      </div>
-
-      {loading && invoices.length === 0 && (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
-        </div>
-      )}
-
-      {!loading && displayed.length === 0 && (
-        <Card className="flex flex-col items-center py-12 text-center">
-          <FileText className="h-10 w-10 text-gray-300 mb-3" />
-          <p className="text-sm text-gray-500">No invoices yet</p>
-          <Link href="/dashboard/invoices/new" className="mt-4">
-            <Button size="sm">Create first invoice</Button>
-          </Link>
-        </Card>
-      )}
-
-      <Card padding={false}>
-        {displayed.map((inv, i) => (
-          <div
-            key={inv.id}
-            className={`flex items-center gap-2 px-4 py-3 ${i < displayed.length - 1 ? "border-b border-gray-50" : ""}`}
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => fetchInvoices(true)}
+            className="flex-shrink-0 font-medium underline"
           >
-            {/* Main row — tappable */}
-            <Link href={`/dashboard/invoices/${inv.id}`} className="flex flex-1 items-center gap-2 min-w-0">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-gray-900 truncate">{inv.shopName}</p>
-                  <Badge variant={statusBadge[inv.status]}>{inv.status}</Badge>
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {inv.invoiceNo} · {paymentLabel(inv.paymentType)} · {formatDate(inv.invoiceDate)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-sm font-medium text-gray-900">{formatLKR(inv.totalAmount)}</span>
-                <ChevronRight className="h-4 w-4 text-gray-300" />
-              </div>
-            </Link>
+            Try again
+          </button>
+        </div>
+      )}
 
-            {/* Delete — admin only */}
-            {isAdmin && (
+      {/* First load */}
+      {firstLoad && (
+        <Panel flush>
+          <div className="space-y-2 p-4">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      {/* Empty */}
+      {!loading && !error && displayed.length === 0 && (
+        <Panel>
+          <div className="flex flex-col items-center py-10 text-center">
+            <FileText className="mb-3 h-8 w-8 text-gray-400" aria-hidden="true" />
+            <p className="text-sm font-medium text-gray-900">
+              {hasFilters ? "No invoices match" : "No invoices yet"}
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              {hasFilters
+                ? "Try a different search or status."
+                : "Create your first invoice to record a sale."}
+            </p>
+            {hasFilters ? (
               <button
-                onClick={() => setToDelete(inv)}
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
-                title="Delete invoice"
+                type="button"
+                onClick={() => { setSearch(""); setStatusFilter(""); }}
+                className="mt-3 text-sm font-medium text-brand-700 hover:underline"
               >
-                <Trash2 className="h-4 w-4 text-gray-400" />
+                Clear filters
               </button>
+            ) : (
+              <div className="mt-4">{newInvoice}</div>
             )}
           </div>
-        ))}
-      </Card>
+        </Panel>
+      )}
 
-      {hasMore && (
-        <Button
-          variant="secondary"
-          className="w-full mt-4"
-          onClick={() => fetchInvoices(false)}
-          loading={loading}
+      {/* List */}
+      {displayed.length > 0 && (
+        <Panel
+          title={plural(displayed.length, "invoice")}
+          description={
+            search.trim() ? "Searching loaded invoices only" : undefined
+          }
+          flush
         >
-          Load more
-        </Button>
+          <ul className="divide-y divide-gray-100">
+            {displayed.map(inv => (
+              <li key={inv.id} className="flex items-center">
+                <Link
+                  href={`/dashboard/invoices/${inv.id}`}
+                  className="group flex min-h-[64px] min-w-0 flex-1 items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-gray-900">{inv.shopName}</p>
+                      <Badge variant={STATUS_BADGE[inv.status] ?? "default"}>
+                        {inv.status}
+                      </Badge>
+                    </div>
+                    <p className="truncate text-xs text-gray-500">
+                      {inv.invoiceNo} · {paymentText(inv.paymentType)} · {formatDate(inv.invoiceDate)}
+                    </p>
+                  </div>
+
+                  <p
+                    className={cn(
+                      "flex-shrink-0 text-sm font-semibold tabular-nums",
+                      inv.status === "cancelled" ? "text-gray-400 line-through" : "text-gray-900"
+                    )}
+                  >
+                    {formatLKR(Number(inv.totalAmount) || 0)}
+                  </p>
+
+                  <ChevronRight
+                    className="h-4 w-4 flex-shrink-0 text-gray-400 group-hover:text-gray-600"
+                    aria-hidden="true"
+                  />
+                </Link>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setToDelete(inv)}
+                    aria-label={`Delete invoice ${inv.invoiceNo}`}
+                    title="Delete invoice"
+                    className="mr-3 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex items-center justify-between rounded-b-xl border-t border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-sm font-medium text-gray-700">
+              Total <span className="font-normal text-gray-500">(excluding cancelled)</span>
+            </p>
+            <p className="text-sm font-semibold tabular-nums text-gray-900">{formatLKR(total)}</p>
+          </div>
+        </Panel>
+      )}
+
+      {hasMore && !firstLoad && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => fetchInvoices(false)}
+            disabled={loading}
+            className="inline-flex h-11 items-center rounded-lg border border-gray-300 bg-white px-5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 sm:h-10"
+          >
+            {loading ? "Loading..." : "Load more invoices"}
+          </button>
+        </div>
       )}
 
       {toDelete && (
         <DeleteConfirmDialog
           title="Delete invoice"
-          description={`${toDelete.invoiceNo} — ${toDelete.shopName}\n${formatLKR(toDelete.totalAmount)} · ${paymentLabel(toDelete.paymentType)}`}
+          description={`${toDelete.invoiceNo} - ${toDelete.shopName}\n${formatLKR(toDelete.totalAmount)} · ${paymentText(toDelete.paymentType)}`}
           onConfirm={() => handleDelete(toDelete)}
           onCancel={() => setToDelete(null)}
         />
