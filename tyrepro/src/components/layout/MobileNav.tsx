@@ -36,7 +36,7 @@ export function MobileNav() {
     { href: "/dashboard",           label: "Home",    icon: LayoutDashboard, roles: ["admin","sales_rep","driver"] },
     { href: "/dashboard/invoices",  label: "Invoice", icon: FileText,        roles: ["admin","sales_rep"]          },
     { href: "/dashboard/inventory", label: "Stock",   icon: Package,         roles: ["admin","sales_rep"]          },
-    { href: "/dashboard/dispatch",  label: "Dispatch",icon: Truck,           roles: ["admin","sales_rep","driver"] },
+    { href: "/dashboard/dispatch",  label: "Dispatch (Coming Soon)",icon: Truck,           roles: ["admin","sales_rep","driver"] },
   ].filter(t => t.roles.includes(role));
 
   const moreItems = [
