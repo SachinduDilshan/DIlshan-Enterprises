@@ -168,7 +168,7 @@ export default function DispatchPage() {
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-gray-900">
-          DISPATCH
+          Dispatch
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Lorry delivery management
