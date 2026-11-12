@@ -37,20 +37,20 @@ const WAREHOUSES = [
 const BRANDS = ["CEAT", "Other"];
 
 const TYRE_TYPES: { value: TyreType; label: string; sizes: string }[] = [
-  { value: "bike",          label: "Bike",          sizes: "e.g. 2.75-17, 3.00-17" },
-  { value: "three_wheeler", label: "3-Wheeler",     sizes: "e.g. 400-8, 4.00-8" },
-  { value: "car",           label: "Car",           sizes: "e.g. 165/70 R13, 185/65 R15" },
-  { value: "suv",           label: "SUV / Jeep",    sizes: "e.g. 215/65 R16, 265/70 R17" },
-  { value: "van",           label: "Van",           sizes: "e.g. 195/70 R15, 165 R13" },
-  { value: "truck",         label: "Truck / Lorry", sizes: "e.g. 7.50-16, 10.00-20" },
-  { value: "bus",           label: "Bus",           sizes: "e.g. 8.25-20, 9.00-20" },
-  { value: "tractor",       label: "Tractor",       sizes: "e.g. 6.00-16, 7.50-16" },
-  { value: "radial",        label: "Radial",        sizes: "e.g. 175/65 R14, 205/55 R16" },
+  { value: "bike", label: "Bike", sizes: "e.g. 2.75-17, 3.00-17" },
+  { value: "three_wheeler", label: "3-Wheeler", sizes: "e.g. 400-8, 4.00-8" },
+  { value: "car", label: "Car", sizes: "e.g. 165/70 R13, 185/65 R15" },
+  { value: "suv", label: "SUV / Jeep", sizes: "e.g. 215/65 R16, 265/70 R17" },
+  { value: "van", label: "Van", sizes: "e.g. 195/70 R15, 165 R13" },
+  { value: "truck", label: "Truck / Lorry", sizes: "e.g. 7.50-16, 10.00-20" },
+  { value: "bus", label: "Bus", sizes: "e.g. 8.25-20, 9.00-20" },
+  { value: "tractor", label: "Tractor", sizes: "e.g. 6.00-16, 7.50-16" },
+  { value: "radial", label: "Radial", sizes: "e.g. 175/65 R14, 205/55 R16" },
 ];
 
 const TUBE_TYPES = [
   { value: "tube_type", label: "Tube type" },
-  { value: "tubeless",  label: "Tubeless" },
+  { value: "tubeless", label: "Tubeless" },
 ];
 
 const VEHICLE_OPTIONS = [
@@ -101,9 +101,9 @@ function StockBar({ qty, reorderLevel }: { qty: number; reorderLevel: number }) 
   const pct = reorderLevel > 0 ? Math.min((qty / (reorderLevel * 3)) * 100, 100) : 50;
   const color =
     qty <= 0 ? "bg-gray-300"
-    : qty <= reorderLevel ? "bg-red-500"
-    : qty <= reorderLevel * 2 ? "bg-amber-500"
-    : "bg-emerald-600";
+      : qty <= reorderLevel ? "bg-red-500"
+        : qty <= reorderLevel * 2 ? "bg-amber-500"
+          : "bg-emerald-600";
   return (
     <div aria-hidden="true" className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
       <div className={cn("h-full rounded-full", color)} style={{ width: `${Math.max(pct, 4)}%` }} />
@@ -1261,9 +1261,18 @@ export default function InventoryPage() {
                             <Pencil className="h-4 w-4" aria-hidden="true" />
                             Edit
                           </button>
-                          <button type="button" onClick={() => toggleProductActive(p)} className={btnSmall}>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleProductActive(p)}
+                            className={`${btnSmall} ${p.active === false
+                                ? "text-green-700 hover:bg-green-50 border-green-200"
+                                : "text-red-700 hover:bg-red-50 border-red-200"
+                              }`}
+                          >
                             {p.active === false ? "Activate" : "Deactivate"}
                           </button>
+
                           {isAdmin && (
                             <button
                               type="button"
@@ -1272,7 +1281,7 @@ export default function InventoryPage() {
                               title="Delete product"
                               className={btnIcon}
                             >
-                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              <Trash2 className="h-4 w-4 text-amber-500" aria-hidden="true" />
                             </button>
                           )}
                         </div>
