@@ -259,8 +259,8 @@ export default function UserManagement() {
                     className={cn(
                       "flex-shrink-0 border transition-all duration-200 shadow-sm",
                       user.active
-                        ? "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800"
-                        : "border-green-200 bg-green-600 text-white hover:border-green-700 hover:bg-green-700 hover:text-white"
+                        ? "text-red-700 hover:bg-red-50 border-red-200"
+                        : "text-green-700 hover:bg-green-50 border-green-200"
                     )}
                   >
                     {user.active ? "Deactivate" : "Activate"}
