@@ -171,7 +171,7 @@ export default function DispatchPage() {
           Dispatch
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Lorry delivery management
+          Delivery management
         </p>
       </div>
 

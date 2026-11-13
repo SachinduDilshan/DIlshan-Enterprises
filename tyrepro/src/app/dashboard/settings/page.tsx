@@ -1,34 +1,60 @@
 "use client";
 
 import { useState } from "react";
-import { Tabs } from "@/components/ui/Tabs";
+import { Bell, Users } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { cn } from "@/lib/utils";
 import UserManagement from "@/app/dashboard/settings/users/UserManagement";
 import NotificationSettings from "@/app/dashboard/settings/notifications/NotificationSettings";
 
 type SettingsTab = "users" | "notifications";
 
+const TABS: { key: SettingsTab; label: string; icon: React.ElementType }[] = [
+  { key: "users",         label: "Users",         icon: Users },
+  { key: "notifications", label: "Notifications", icon: Bell  },
+];
+
 export default function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("users");
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-xl font-medium text-gray-900">SETTINGS</h1>
-        <p className="text-sm text-gray-500">System Configuration</p>
-      </div>
-
-      <Tabs
-        className="mb-6"
-        active={tab}
-        onChange={k => setTab(k as SettingsTab)}
-        options={[
-          { key: "users",         label: "Users"         },
-          { key: "notifications", label: "Notifications" },
-        ]}
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Settings"
+        description="Staff accounts and email alert preferences"
       />
 
-      {tab === "users"         && <UserManagement />}
-      {tab === "notifications" && <NotificationSettings />}
+      <div className="mb-6 border-b border-gray-200">
+        <div role="tablist" aria-label="Settings sections" className="scrollbar-none -mb-px flex gap-1 overflow-x-auto">
+          {TABS.map(t => {
+            const Icon = t.icon;
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "flex flex-shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors",
+                  active
+                    ? "border-brand-600 text-gray-900"
+                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div role="tabpanel">
+        {tab === "users" && <UserManagement />}
+        {tab === "notifications" && <NotificationSettings />}
+      </div>
     </div>
   );
 }

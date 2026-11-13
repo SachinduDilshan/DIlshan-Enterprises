@@ -42,7 +42,7 @@ export function MobileNav() {
   const moreItems = [
     { href: "/dashboard/shops",      label: "Shops",      icon: Store,         roles: ["admin","sales_rep"] },
     { href: "/dashboard/cheques",    label: "Cheques",    icon: CalendarClock, roles: ["admin","sales_rep"] },
-    { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw,     roles: ["admin","sales_rep"] },
+    { href: "/dashboard/uc-returns", label: "Returns", icon: RotateCcw,     roles: ["admin","sales_rep"] },
     { href: "/dashboard/reports",    label: "Reports",    icon: BarChart3,     roles: ["admin","sales_rep"] },
     { href: "/dashboard/settings",   label: "Settings",   icon: Settings,      roles: ["admin"]             },
   ].filter(t => t.roles.includes(role));

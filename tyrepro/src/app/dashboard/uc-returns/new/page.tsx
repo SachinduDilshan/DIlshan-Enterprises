@@ -160,7 +160,7 @@ export default function NewUCReturnPage() {
           </button>
         </Link>
         <div>
-          <h1 className="text-xl font-medium text-gray-900">Add UC return</h1>
+          <h1 className="text-xl font-medium text-gray-900">Add Return</h1>
           <p className="text-xs text-gray-400">Log a defective tyre returned from a shop</p>
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function NewUCReturnPage() {
         <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
         <p className="text-xs text-blue-800">
           UC tyres are tracked separately from your warehouse inventory.
-          No stock will be changed when you log a UC return.
+          No stock will be changed when you log a return.
         </p>
       </div>
 
@@ -310,7 +310,7 @@ export default function NewUCReturnPage() {
         )}
 
         <Button type="submit" size="lg" loading={saving} className="w-full">
-          Save UC return
+          Save Return
         </Button>
       </form>
     </div>

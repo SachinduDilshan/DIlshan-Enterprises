@@ -1248,7 +1248,8 @@ export default function InventoryPage() {
                             {p.name}
                           </p>
                           <Badge>{typeLabel(p.type)}</Badge>
-                          {p.active === false && <Badge variant="danger">Inactive</Badge>}
+                          {p.active === false && <Badge variant="warning">Inactive</Badge>}
+                          {p.active === true && <Badge variant="success">Active</Badge>}
                         </div>
                         <p className="mt-0.5 text-xs text-gray-500">
                           {p.sku} · {p.brand} · Rs {p.unitPrice?.toLocaleString()}

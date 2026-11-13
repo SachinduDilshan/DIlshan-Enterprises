@@ -15,31 +15,32 @@ import { Modal } from "@/components/ui/Modal";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Shield, UserPlus, Truck, User, Eye, EyeOff } from "lucide-react";
 import type { AppUser, UserRole } from "@/types";
+import { cn } from "@/lib/utils";
 
 const ROLE_OPTS = [
-  { value: "admin",     label: "Admin — full access"          },
+  { value: "admin", label: "Admin — full access" },
   { value: "sales_rep", label: "Sales rep — invoices & shops" },
-  { value: "driver",    label: "Driver — dispatch only"       },
+  { value: "driver", label: "Driver — dispatch only" },
 ];
 
 const ROLE_META: Record<string, {
-  label: string; variant: "purple"|"info"|"default"; icon: React.ElementType;
+  label: string; variant: "purple" | "info" | "default"; icon: React.ElementType;
 }> = {
-  admin:     { label: "Admin",     variant: "purple",  icon: Shield },
-  sales_rep: { label: "Sales rep", variant: "info",    icon: User   },
-  driver:    { label: "Driver",    variant: "default", icon: Truck  },
+  admin: { label: "Admin", variant: "purple", icon: Shield },
+  sales_rep: { label: "Sales rep", variant: "info", icon: User },
+  driver: { label: "Driver", variant: "default", icon: Truck },
 };
 
 // ── Add user modal ────────────────────────────────────────
 
 function AddUserModal({ onClose }: { onClose: () => void }) {
-  const [name, setName]         = useState("");
-  const [email, setEmail]       = useState("");
-  const [role, setRole]         = useState<UserRole>("sales_rep");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<UserRole>("sales_rep");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -52,9 +53,9 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
     setSaving(true); setError("");
     try {
       const res = await fetch("/api/create-user", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, email, role, password }),
+        body: JSON.stringify({ name, email, role, password }),
       });
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
@@ -127,7 +128,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
             >
               {showPass
                 ? <EyeOff className="h-4 w-4" />
-                : <Eye    className="h-4 w-4" />}
+                : <Eye className="h-4 w-4" />}
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-1">
@@ -148,10 +149,10 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
 // ── Main component ────────────────────────────────────────
 
 export default function UserManagement() {
-  const { appUser }             = useAuth();
-  const [users, setUsers]       = useState<AppUser[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [showAdd, setShowAdd]   = useState(false);
+  const { appUser } = useAuth();
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
@@ -209,9 +210,9 @@ export default function UserManagement() {
 
       <div className="space-y-3">
         {users.map(user => {
-          const meta     = ROLE_META[user.role] ?? ROLE_META.sales_rep;
+          const meta = ROLE_META[user.role] ?? ROLE_META.sales_rep;
           const RoleIcon = meta.icon;
-          const isMe     = user.uid === appUser?.uid;
+          const isMe = user.uid === appUser?.uid;
 
           return (
             <Card key={user.uid}>
@@ -226,7 +227,8 @@ export default function UserManagement() {
                       {user.displayName}
                     </p>
                     {isMe && <span className="text-xs text-gray-400">(you)</span>}
-                    {!user.active && <Badge variant="danger">Inactive</Badge>}
+                    {!user.active && <Badge variant="warning">Inactive</Badge>}
+                    {user.active && <Badge variant="success">Active</Badge>}
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{user.email}</p>
 
@@ -251,10 +253,15 @@ export default function UserManagement() {
                 {!isMe && (
                   <Button
                     size="sm"
-                    variant={user.active ? "secondary" : "primary"}
+                    variant="secondary"
                     loading={updating === user.uid}
                     onClick={() => toggleActive(user)}
-                    className="flex-shrink-0"
+                    className={cn(
+                      "flex-shrink-0 border transition-all duration-200 shadow-sm",
+                      user.active
+                        ? "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800"
+                        : "border-green-200 bg-green-600 text-white hover:border-green-700 hover:bg-green-700 hover:text-white"
+                    )}
                   >
                     {user.active ? "Deactivate" : "Activate"}
                   </Button>

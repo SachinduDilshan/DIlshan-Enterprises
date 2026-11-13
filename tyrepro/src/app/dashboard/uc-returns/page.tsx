@@ -1,39 +1,52 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  query, orderBy, onSnapshot, doc,
-  updateDoc, deleteDoc, serverTimestamp, Timestamp,
+  deleteDoc, doc, onSnapshot, orderBy, query,
+  serverTimestamp, Timestamp, updateDoc,
 } from "firebase/firestore";
+import {
+  AlertTriangle, Check, ChevronDown, PackageCheck, Pencil, Plus, Send, Trash2, Undo2,
+} from "lucide-react";
 import { ucReturnsCol } from "@/lib/firestore-collections";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotifications } from "@/hooks/useNotifications";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Dropdown } from "@/components/ui/Dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { Tabs } from "@/components/ui/Tabs";
-import { useNotifications } from "@/hooks/useNotifications";
-import { cn } from "@/lib/utils";
-import {
-  Plus, PackageCheck, Send, Clock, CheckCircle,
-  AlertTriangle, Undo2, Pencil, Trash2,
-  ChevronDown, ChevronUp, MapPin, Tag, Calendar,
-} from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatStrip } from "@/components/ui/StatStrip";
+import type { StatItem } from "@/components/ui/StatStrip";
+import { cn, formatLKR } from "@/lib/utils";
 import type { UCReturn, UCReturnStatus } from "@/types";
 
-// ── Constants ─────────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* Constants and helpers                                               */
+/* ------------------------------------------------------------------ */
 
-const STATUS_META: Record<UCReturnStatus, {
-  label: string; badge: "warning" | "info" | "default" | "success";
-  icon: React.ElementType; btnClass: string;
-}> = {
-  approved: { label: "Tyre with us", badge: "warning", icon: PackageCheck, btnClass: "bg-amber-600 hover:bg-amber-700 text-white border-0" },
-  sent_to_supplier: { label: "Sent to CEAT", badge: "info", icon: Send, btnClass: "bg-blue-600 hover:bg-blue-700 text-white border-0" },
-  awaiting_replacement: { label: "Awaiting replacement", badge: "default", icon: Clock, btnClass: "bg-gray-700 hover:bg-gray-800 text-white border-0" },
-  closed: { label: "Closed", badge: "success", icon: CheckCircle, btnClass: "bg-green-600 hover:bg-green-700 text-white border-0" },
+type UC = UCReturn & {
+  unitPrice?: number;
+  totalValue?: number;
+  reasonNotes?: string | null;
+};
+
+const DAY = 86_400_000;
+const WAIT_DAYS = 3;   // tyre sitting with us before it should go to CEAT
+const CEAT_DAYS = 30;  // time CEAT gets before we follow up
+
+const STATUS_META: Record<
+  UCReturnStatus,
+  { label: string; badge: "warning" | "info" | "default" | "success" }
+> = {
+  approved:             { label: "Tyre with us",         badge: "warning" },
+  sent_to_supplier:     { label: "Sent to CEAT",         badge: "info" },
+  awaiting_replacement: { label: "Awaiting replacement", badge: "default" },
+  closed:               { label: "Closed",               badge: "success" },
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -44,71 +57,183 @@ const REASON_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-function fmtDt(ts: Timestamp | undefined): string {
-  if (!ts) return "—";
-  return ts.toDate().toLocaleDateString("en-LK", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+const REASON_OPTIONS = Object.entries(REASON_LABELS).map(([value, label]) => ({ value, label }));
+
+interface NextAction {
+  label: string;
+  icon: React.ElementType;
+  message: string;
+  fields: () => Record<string, any>;
+  undo: Record<string, any>;
 }
 
-function daysSince(ts: Timestamp | undefined): number | null {
-  if (!ts) return null;
-  return Math.floor((Date.now() - ts.toDate().getTime()) / 86_400_000);
+const NEXT_ACTIONS: Partial<Record<UCReturnStatus, NextAction>> = {
+  approved: {
+    label: "Mark sent to CEAT",
+    icon: Send,
+    message: "Marked as sent to CEAT",
+    fields: () => ({ status: "sent_to_supplier", sentToSupplierAt: Timestamp.now() }),
+    undo: { status: "approved", sentToSupplierAt: null },
+  },
+  sent_to_supplier: {
+    label: "Confirm CEAT acknowledged",
+    icon: Check,
+    message: "Marked as acknowledged by CEAT",
+    fields: () => ({ status: "awaiting_replacement" }),
+    undo: { status: "sent_to_supplier" },
+  },
+  awaiting_replacement: {
+    label: "Mark replacement received",
+    icon: PackageCheck,
+    message: "Marked replacement received",
+    fields: () => ({ status: "closed", replacementReceivedAt: Timestamp.now() }),
+    undo: { status: "awaiting_replacement", replacementReceivedAt: null },
+  },
+};
+
+function toDate(value: any): Date | null {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-// ── Undo toast ────────────────────────────────────────────
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+// Whole calendar days between a past date and today
+function daysSince(value: any): number | null {
+  const d = toDate(value);
+  if (!d) return null;
+  return Math.round((startOfDay(new Date()).getTime() - startOfDay(d).getTime()) / DAY);
+}
+
+function fmtDate(value: any): string {
+  const d = toDate(value);
+  return d
+    ? d.toLocaleDateString("en-LK", { day: "2-digit", month: "short", year: "numeric" })
+    : "-";
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function valueOf(uc: UC): number {
+  return Number(uc.totalValue) || (Number(uc.unitPrice) || 0) * (Number(uc.qty) || 0);
+}
+
+function followUp(uc: UC): { kind: "waiting" | "late"; days: number } | null {
+  if (uc.status === "approved") {
+    const d = daysSince(uc.tyreReceivedAt);
+    if (d !== null && d >= WAIT_DAYS) return { kind: "waiting", days: d };
+  }
+  if (uc.status === "sent_to_supplier" || uc.status === "awaiting_replacement") {
+    const d = daysSince(uc.sentToSupplierAt);
+    if (d !== null && d >= CEAT_DAYS) return { kind: "late", days: d };
+  }
+  return null;
+}
+
+const btnPrimary =
+  "inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60";
+const btnIcon =
+  "inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800";
+
+/* ------------------------------------------------------------------ */
+/* Undo toast                                                          */
+/* ------------------------------------------------------------------ */
 
 interface UndoState {
-  ucId: string; prevFields: Record<string, any>;
-  message: string; countdown: number;
+  ucId: string;
+  prevFields: Record<string, any>;
+  message: string;
+  countdown: number;
 }
 
-function UndoToast({ undo, onUndo, onDismiss }: {
-  undo: UndoState; onUndo: () => void; onDismiss: () => void;
-}) {
-  useEffect(() => { if (undo.countdown <= 0) onDismiss(); }, [undo.countdown]);
+function UndoToast({ undo, onUndo }: { undo: UndoState; onUndo: () => void }) {
   return (
-    <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-900 text-white px-4 py-3 rounded-2xl shadow-xl min-w-[280px]"
-      style={{ animation: "slideUp 0.2s ease" }}>
-      <div className="flex-1">
-        <p className="text-sm font-medium">{undo.message}</p>
-        <p className="text-xs text-gray-400">Auto-dismiss in {undo.countdown}s</p>
+    <>
+      <div
+        role="status"
+        aria-live="polite"
+        className="uc-toast fixed bottom-24 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-lg md:bottom-6"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{undo.message}</p>
+          <p className="text-xs text-gray-300">You can undo this for {undo.countdown}s</p>
+        </div>
+        <button
+          type="button"
+          onClick={onUndo}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/15 px-3 text-sm font-medium transition-colors hover:bg-white/25"
+        >
+          <Undo2 className="h-4 w-4" aria-hidden="true" />
+          Undo
+        </button>
       </div>
-      <button onClick={onUndo}
-        className="flex items-center gap-1.5 rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-sm font-medium transition-colors">
-        <Undo2 className="h-3.5 w-3.5" /> Undo
-      </button>
-    </div>
+      <style>{`
+        @keyframes ucToastIn {
+          from { transform: translate(-50%, 16px); opacity: 0; }
+          to   { transform: translate(-50%, 0);    opacity: 1; }
+        }
+        .uc-toast { animation: ucToastIn 0.2s ease-out; }
+        @media (prefers-reduced-motion: reduce) { .uc-toast { animation: none; } }
+      `}</style>
+    </>
   );
 }
 
-// ── Edit UC return modal ──────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* Edit modal                                                          */
+/* ------------------------------------------------------------------ */
 
-function EditUCModal({ uc, onClose }: { uc: UCReturn; onClose: () => void }) {
-  const [qty, setQty] = useState(uc.qty);
-  const [unitPrice, setUnitPrice] = useState((uc as any).unitPrice ?? 0);
+function EditUCModal({ uc, onClose }: { uc: UC; onClose: () => void }) {
+  const [qtyText, setQtyText] = useState(String(uc.qty));
+  const [priceText, setPriceText] = useState(String(uc.unitPrice ?? 0));
   const [reason, setReason] = useState(uc.reason);
-  const [reasonNotes, setNotes] = useState((uc as any).reasonNotes ?? "");
+  const [notes, setNotes] = useState(uc.reasonNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const qty = parseInt(qtyText, 10);
+  const unitPrice = parseFloat(priceText);
+  const total = Number.isFinite(qty) && Number.isFinite(unitPrice) ? qty * unitPrice : 0;
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!Number.isFinite(qty) || qty < 1) { setError("Quantity must be at least 1."); return; }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) { setError("Enter a valid unit price."); return; }
+
     setSaving(true);
+    setError("");
     try {
-      await updateDoc(doc(ucReturnsCol, uc.id), {
-        qty, unitPrice, totalValue: qty * unitPrice,
-        reason, reasonNotes: reasonNotes.trim() || null,
+      const update: Record<string, any> = {
+        qty,
+        unitPrice,
+        totalValue: qty * unitPrice,
+        reason,
+        reasonNotes: notes.trim() || null,
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(doc(ucReturnsCol, uc.id), update);
       onClose();
-    } catch (err: any) { setError(err.message); }
-    finally { setSaving(false); }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Modal title="Edit UC return" subtitle={`${uc.shopName} · ${uc.productName}`}
-      onClose={onClose} size="sm"
+    <Modal
+      title="Edit Return"
+      subtitle={`${uc.shopName} · ${uc.productName}`}
+      onClose={onClose}
+      size="sm"
       footer={
         <div className="flex gap-3">
           <Button variant="secondary" className="flex-1" type="button" onClick={onClose}>Cancel</Button>
@@ -117,419 +242,582 @@ function EditUCModal({ uc, onClose }: { uc: UCReturn; onClose: () => void }) {
       }
     >
       <form id="edit-uc-form" onSubmit={handleSave} className="space-y-3">
-        <Input label="Quantity returned *" type="number" min={1}
-          value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)} />
-        <Input label="Unit price (Rs) *" type="number" min={0}
-          value={unitPrice} onChange={e => setUnitPrice(parseFloat(e.target.value) || 0)} />
-        <Dropdown label="Reason" value={reason}
-          onChange={v => setReason(v as any)}
-          options={[
-            { value: "sidewall_bulge", label: "Sidewall bulge" },
-            { value: "tread_separation", label: "Tread separation" },
-            { value: "manufacturing_defect", label: "Manufacturing defect" },
-            { value: "bead_damage", label: "Bead damage" },
-            { value: "other", label: "Other" },
-          ]} />
-        <Input label="Additional notes" value={reasonNotes}
+        <Input
+          label="Quantity returned *"
+          type="number"
+          min={1}
+          value={qtyText}
+          onChange={e => setQtyText(e.target.value)}
+        />
+        <Input
+          label="Unit price (Rs) *"
+          type="number"
+          min={0}
+          value={priceText}
+          onChange={e => setPriceText(e.target.value)}
+          hint={`Total return value: ${formatLKR(total)}`}
+        />
+        <Dropdown
+          label="Reason"
+          value={reason}
+          onChange={v => setReason(v as UC["reason"])}
+          options={REASON_OPTIONS}
+        />
+        <Input
+          label="Additional notes"
+          value={notes}
           onChange={e => setNotes(e.target.value)}
-          placeholder="Any extra details..." />
-        {error && <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
+          placeholder="Any extra details"
+        />
+        {error && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            {error}
+          </div>
+        )}
       </form>
     </Modal>
   );
 }
 
-// ── UC Return Card ────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* Progress timeline                                                   */
+/* ------------------------------------------------------------------ */
 
-function UCCard({ uc, isAdmin, onAction, onDelete, onEdit }: {
-  uc: UCReturn; isAdmin: boolean;
-  onAction: (ucId: string, newStatus: UCReturnStatus, fields: Record<string, any>, prevFields: Record<string, any>, message: string) => void;
-  onDelete: (uc: UCReturn) => void;
-  onEdit: (uc: UCReturn) => void;
+function Timeline({ steps }: { steps: { label: string; date: Date | null; done: boolean }[] }) {
+  const currentIdx = steps.findIndex(s => !s.done);
+
+  return (
+    <ol className="mt-4 grid grid-cols-3" aria-label="Return progress">
+      {steps.map((s, i) => {
+        const state = s.done ? "done" : i === currentIdx ? "current" : "upcoming";
+        return (
+          <li key={s.label} className="relative flex flex-col items-center px-1 text-center">
+            {i > 0 && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "absolute -left-1/2 top-3 h-0.5 w-full -translate-y-1/2",
+                  steps[i - 1].done ? "bg-emerald-600" : "bg-gray-200"
+                )}
+              />
+            )}
+            <span
+              className={cn(
+                "relative z-10 flex h-6 w-6 items-center justify-center rounded-full",
+                state === "done" && "bg-emerald-600 text-white",
+                state === "current" && "border-2 border-brand-600 bg-white",
+                state === "upcoming" && "border-2 border-gray-300 bg-white"
+              )}
+            >
+              {state === "done" && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+              {state === "current" && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+            </span>
+            <span
+              className={cn(
+                "mt-1.5 text-xs font-medium",
+                state === "upcoming" ? "text-gray-500" : "text-gray-900"
+              )}
+            >
+              {s.label}
+            </span>
+            <span className="text-xs tabular-nums text-gray-500">
+              {s.date ? fmtDate(s.date) : "\u00A0"}
+            </span>
+            <span className="sr-only">
+              {state === "done" ? "Done" : state === "current" ? "Next step" : "Not started"}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* One return                                                          */
+/* ------------------------------------------------------------------ */
+
+function UCItem({
+  uc, isAdmin, busy, onAction, onEdit, onDelete,
+}: {
+  uc: UC;
+  isAdmin: boolean;
+  busy: boolean;
+  onAction: (uc: UC, action: NextAction) => void;
+  onEdit: (uc: UC) => void;
+  onDelete: (uc: UC) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const meta = STATUS_META[uc.status];
-  const StatusIcon = meta.icon;
-  const daysWithUs = daysSince(uc.tyreReceivedAt);
-  const daysSent = daysSince(uc.sentToSupplierAt);
-  const totalVal = (uc as any).totalValue ?? 0;
+  const [open, setOpen] = useState(false);
 
-  const STEPS = [
-    { label: "Received from shop", done: uc.tyreReceivedFromShop, date: uc.tyreReceivedAt },
-    { label: "Sent to CEAT", done: !!uc.sentToSupplierAt, date: uc.sentToSupplierAt },
-    { label: "Replacement back", done: !!uc.replacementReceivedAt, date: uc.replacementReceivedAt },
+  const meta = STATUS_META[uc.status];
+  const next = NEXT_ACTIONS[uc.status];
+  const flag = followUp(uc);
+  const notes = uc.reasonNotes?.trim();
+  const NextIcon = next?.icon;
+
+  const steps = [
+    { label: "Received from shop", date: toDate(uc.tyreReceivedAt), done: !!uc.tyreReceivedFromShop },
+    { label: "Sent to CEAT", date: toDate(uc.sentToSupplierAt), done: !!uc.sentToSupplierAt },
+    { label: "Replacement back", date: toDate(uc.replacementReceivedAt), done: !!uc.replacementReceivedAt },
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-3 transition-shadow hover:shadow-sm">
-      {/* Status bar at top */}
-      <div className={cn("h-1 w-full",
-        uc.status === "approved" ? "bg-amber-400" :
-          uc.status === "sent_to_supplier" ? "bg-blue-400" :
-            uc.status === "awaiting_replacement" ? "bg-gray-300" : "bg-green-400"
-      )} />
-
-      <div className="p-4">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <p className="text-sm font-semibold text-gray-900">{uc.shopName}</p>
-              <Badge variant={meta.badge}>
-                <StatusIcon className="h-3 w-3 mr-1" />
-                {meta.label}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <MapPin className="h-3 w-3 flex-shrink-0" />
-              <span>{uc.shopCity}</span>
-            </div>
+    <li className="px-4 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-semibold text-gray-900">{uc.shopName}</p>
+            <Badge variant={meta.badge}>{meta.label}</Badge>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {isAdmin && (
-              <>
-                <button onClick={() => onEdit(uc)}
-                  className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors">
-                  <Pencil className="h-3.5 w-3.5 text-gray-400" />
-                </button>
-                <button onClick={() => onDelete(uc)}
-                  className="h-7 w-7 flex items-center justify-center rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5 text-gray-400" />
-                </button>
-              </>
-            )}
-          </div>
+          {uc.shopCity && <p className="mt-0.5 text-xs text-gray-500">{uc.shopCity}</p>}
         </div>
-
-        {/* Tyre info */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="rounded-xl bg-gray-50 px-3 py-2">
-            <p className="text-[10px] text-gray-400 mb-0.5 uppercase tracking-wide">Tyre</p>
-            <p className="text-xs font-medium text-gray-900 truncate">{uc.productName}</p>
-            <p className="text-[10px] text-gray-400">{uc.productSku}</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-3 py-2">
-            <p className="text-[10px] text-gray-400 mb-0.5 uppercase tracking-wide">Return value</p>
-            <p className="text-sm font-semibold text-gray-900">Rs {totalVal.toLocaleString()}</p>
-            <p className="text-[10px] text-gray-400">{uc.qty} tyre{uc.qty > 1 ? "s" : ""} · Rs {((uc as any).unitPrice ?? 0).toLocaleString()} each</p>
-          </div>
+        <div className="flex-shrink-0 text-right">
+          <p className="text-sm font-semibold tabular-nums text-gray-900">{formatLKR(valueOf(uc))}</p>
+          <p className="text-xs text-gray-500">return value</p>
         </div>
+      </div>
 
-        {/* Reason row */}
-        <div className="flex items-center gap-3 mb-3 text-xs text-gray-600">
-          <div className="flex items-center gap-1.5">
-            <Tag className="h-3 w-3 text-gray-400" />
-            <span>{REASON_LABELS[uc.reason] ?? uc.reason}</span>
-            {(uc as any).reasonNotes && (
-              <span className="text-gray-400">— {(uc as any).reasonNotes}</span>
-            )}
-          </div>
-        </div>
+      <p className="mt-3 text-sm text-gray-900">
+        {uc.qty}x {uc.productName}
+      </p>
+      <p className="text-xs text-gray-500">
+        {REASON_LABELS[uc.reason] ?? uc.reason}
+        {notes ? ` · ${notes}` : ""}
+        {` · Replacement for shop: ${uc.gaveTyreToShop ? "given" : "not yet"}`}
+      </p>
 
-        {/* Alert banners */}
-        {uc.status === "approved" && daysWithUs !== null && daysWithUs >= 3 && (
-          <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-            <p className="text-xs text-amber-800">
-              Tyre with you <span className="font-semibold">{daysWithUs} days</span> — not sent to CEAT
-            </p>
-          </div>
-        )}
-        {(uc.status === "sent_to_supplier" || uc.status === "awaiting_replacement") && daysSent !== null && daysSent >= 30 && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 mb-3">
-            <AlertTriangle className="h-3.5 w-3.5 text-red-600 flex-shrink-0" />
-            <p className="text-xs text-red-800">
-              Sent to CEAT <span className="font-semibold">{daysSent} days ago</span> — follow up!
-            </p>
-          </div>
-        )}
-
-        {/* Timeline */}
-        <div className="flex items-start mb-3">
-          {STEPS.map((step, i) => (
-            <div key={step.label} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
-                <div className={cn(
-                  "h-6 w-6 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-                  step.done ? "border-green-500 bg-green-500" : "border-gray-200 bg-white"
-                )}>
-                  {step.done && <CheckCircle className="h-3.5 w-3.5 text-white" />}
-                </div>
-                <p className="text-[10px] text-gray-500 mt-1 text-center leading-tight">{step.label}</p>
-                {step.date && (
-                  <p className="text-[10px] text-gray-400 text-center mt-0.5">{fmtDt(step.date)}</p>
-                )}
-              </div>
-              {i < STEPS.length - 1 && (
-                <div className={cn("h-0.5 w-6 flex-shrink-0 mx-0.5 mt-[-20px]",
-                  step.done ? "bg-green-400" : "bg-gray-200")} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Expandable extra details */}
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 transition-colors mb-3"
+      {flag && (
+        <p
+          className={cn(
+            "mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
+            flag.kind === "late"
+              ? "border-red-200 bg-red-50 text-red-900"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          )}
         >
-          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          {expanded ? "Hide details" : "Show details"}
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          {flag.kind === "late"
+            ? `Sent to CEAT ${plural(flag.days, "day")} ago. Follow up on the replacement.`
+            : `With you for ${plural(flag.days, "day")} and not yet sent to CEAT.`}
+        </p>
+      )}
+
+      <Timeline steps={steps} />
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {next && NextIcon && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAction(uc, next)}
+            className={btnPrimary}
+          >
+            <NextIcon className="h-4 w-4" aria-hidden="true" />
+            {busy ? "Saving..." : next.label}
+          </button>
+        )}
+
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(v => !v)}
+          className="inline-flex h-10 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-700 hover:underline"
+        >
+          {open ? "Hide details" : "Details"}
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform", open && "rotate-180")}
+            aria-hidden="true"
+          />
         </button>
 
-        {expanded && (
-          <div className="rounded-xl bg-gray-50 p-3 mb-3 grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <p className="text-gray-400 mb-0.5">Received from shop</p>
-              <p className="font-medium text-gray-900">{fmtDt(uc.tyreReceivedAt)}</p>
-            </div>
-            <div>
-              <p className="text-gray-400 mb-0.5">Replacement given to shop</p>
-              <p className={cn("font-medium", uc.gaveTyreToShop ? "text-green-700" : "text-amber-700")}>
-                {uc.gaveTyreToShop ? `Yes · ${fmtDt(uc.gaveTyreToShopAt)}` : "Not yet"}
-              </p>
-            </div>
-            {uc.sentToSupplierAt && (
-              <div>
-                <p className="text-gray-400 mb-0.5">Sent to CEAT</p>
-                <p className="font-medium text-gray-900">{fmtDt(uc.sentToSupplierAt)}</p>
-              </div>
-            )}
-            {uc.replacementReceivedAt && (
-              <div>
-                <p className="text-gray-400 mb-0.5">CEAT replacement received</p>
-                <p className="font-medium text-gray-900">{fmtDt(uc.replacementReceivedAt)}</p>
-              </div>
-            )}
+        {isAdmin && (
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onEdit(uc)}
+              aria-label={`Edit return for ${uc.shopName}`}
+              title="Edit"
+              className={btnIcon}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(uc)}
+              aria-label={`Delete return for ${uc.shopName}`}
+              title="Delete"
+              className={cn(btnIcon, "hover:bg-red-50 hover:text-red-700")}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
         )}
-
-        {/* Action buttons */}
-        <div className="flex flex-wrap gap-2">
-          {uc.status === "approved" && (
-            <Button size="sm" className={meta.btnClass}
-              onClick={() => onAction(uc.id, "sent_to_supplier",
-                { status: "sent_to_supplier", sentToSupplierAt: Timestamp.now() },
-                { status: "approved", sentToSupplierAt: null },
-                "Marked as sent to CEAT"
-              )}>
-              <Send className="h-3.5 w-3.5" /> Mark sent to CEAT
-            </Button>
-          )}
-          {uc.status === "sent_to_supplier" && (
-            <Button size="sm" className={STATUS_META.sent_to_supplier.btnClass}
-              onClick={() => onAction(uc.id, "awaiting_replacement",
-                { status: "awaiting_replacement" },
-                { status: "sent_to_supplier" },
-                "Marked CEAT acknowledged"
-              )}>
-              <CheckCircle className="h-3.5 w-3.5" /> Confirm CEAT acknowledged
-            </Button>
-          )}
-          {uc.status === "awaiting_replacement" && (
-            <Button size="sm" className={STATUS_META.closed.btnClass}
-              onClick={() => onAction(uc.id, "closed",
-                { status: "closed", replacementReceivedAt: Timestamp.now() },
-                { status: "awaiting_replacement", replacementReceivedAt: null },
-                "Marked replacement received"
-              )}>
-              <PackageCheck className="h-3.5 w-3.5" /> Mark replacement received
-            </Button>
-          )}
-        </div>
       </div>
-    </div>
+
+      {open && (
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-gray-50 p-3 text-xs">
+          <div>
+            <dt className="text-gray-500">Tyre</dt>
+            <dd className="mt-0.5 font-medium text-gray-900">{uc.productSku || "-"}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Unit price</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-gray-900">
+              {formatLKR(Number(uc.unitPrice) || 0)} x {uc.qty}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Received from shop</dt>
+            <dd className="mt-0.5 font-medium text-gray-900">{fmtDate(uc.tyreReceivedAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Replacement given to shop</dt>
+            <dd className="mt-0.5 font-medium text-gray-900">
+              {uc.gaveTyreToShop ? `Yes, ${fmtDate(uc.gaveTyreToShopAt)}` : "Not yet"}
+            </dd>
+          </div>
+          {uc.sentToSupplierAt && (
+            <div>
+              <dt className="text-gray-500">Sent to CEAT</dt>
+              <dd className="mt-0.5 font-medium text-gray-900">{fmtDate(uc.sentToSupplierAt)}</dd>
+            </div>
+          )}
+          {uc.replacementReceivedAt && (
+            <div>
+              <dt className="text-gray-500">CEAT replacement received</dt>
+              <dd className="mt-0.5 font-medium text-gray-900">{fmtDate(uc.replacementReceivedAt)}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+    </li>
   );
 }
 
-// ── Summary ───────────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
 
-function Summary({ returns }: { returns: UCReturn[] }) {
-  const totalQty = returns.reduce((s, r) => s + r.qty, 0);
-  const totalValue = returns.reduce((s, r) => s + ((r as any).totalValue ?? 0), 0);
-  const withUs = returns.filter(r => r.status === "approved").length;
-  const withCEAT = returns.filter(r => r.status === "sent_to_supplier" || r.status === "awaiting_replacement").length;
-  const notGiven = returns.filter(r => !r.gaveTyreToShop).length;
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-5">
-      <div className="px-4 py-3 border-b border-gray-50">
-        <p className="text-sm font-medium text-gray-900">Active summary</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {returns.length} returns · {totalQty} tyres · Rs {totalValue.toLocaleString()} total value
-        </p>
-      </div>
-      <div className="grid grid-cols-3 divide-x divide-gray-100">
-        <div className="px-3 py-3 text-center">
-          <p className="text-xl font-semibold text-amber-700">{withUs}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">With us</p>
-        </div>
-        <div className="px-3 py-3 text-center">
-          <p className="text-xl font-semibold text-blue-700">{withCEAT}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">With CEAT</p>
-        </div>
-        <div className="px-3 py-3 text-center">
-          <p className={cn("text-xl font-semibold", notGiven > 0 ? "text-amber-700" : "text-green-700")}>
-            {notGiven}
-          </p>
-          <p className="text-[11px] text-gray-500 mt-0.5">No replacement</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────
-
-type TabKey = "active" | "closed";
+type Tab = "active" | "closed";
+type Filter = "all" | "us" | "ceat" | "follow";
 
 export default function UCReturnsPage() {
   const { appUser } = useAuth();
-  const isAdmin = appUser?.role === "admin";
-  const [allReturns, setAllReturns] = useState<UCReturn[]>([]);
   const { refreshAlerts } = useNotifications();
+  const isAdmin = appUser?.role === "admin";
+
+  const [all, setAll] = useState<UC[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TabKey>("active");
-  const [undoState, setUndoState] = useState<UndoState | null>(null);
-  const [toDelete, setToDelete] = useState<UCReturn | null>(null);
-  const [editUC, setEditUC] = useState<UCReturn | null>(null);
-  const undoTimer = useRef<NodeJS.Timeout | null>(null);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<Tab>("active");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoState | null>(null);
+  const [toDelete, setToDelete] = useState<UC | null>(null);
+  const [editing, setEditing] = useState<UC | null>(null);
 
   useEffect(() => {
     const q = query(ucReturnsCol, orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, snap => {
-      setAllReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as UCReturn)));
-      setLoading(false);
-    });
-    return unsub;
+    return onSnapshot(
+      q,
+      snap => {
+        setAll(snap.docs.map(d => ({ ...d.data(), id: d.id }) as UC));
+        setLoading(false);
+      },
+      err => {
+        console.error("Returns load error:", err);
+        setError("Could not load returns. Check your connection and try again.");
+        setLoading(false);
+      }
+    );
   }, []);
 
-  useEffect(() => () => { if (undoTimer.current) clearInterval(undoTimer.current); }, []);
-
-  const displayed = tab === "active"
-    ? allReturns.filter(r => r.status !== "closed")
-    : allReturns.filter(r => r.status === "closed");
-
-  async function handleAction(
-    ucId: string, newStatus: UCReturnStatus,
-    fields: Record<string, any>, prevFields: Record<string, any>, message: string
-  ) {
-    await updateDoc(doc(ucReturnsCol, ucId), { ...fields, updatedAt: serverTimestamp() });
-
-    // Refresh alerts after a short delay so Firestore propagates
-    setTimeout(() => refreshAlerts(), 1500);
-
-    if (undoTimer.current) clearInterval(undoTimer.current);
-    setUndoState({ ucId, prevFields, message, countdown: 10 });
-    undoTimer.current = setInterval(() => {
-      setUndoState(prev => {
-        if (!prev) return null;
-        if (prev.countdown <= 1) { clearInterval(undoTimer.current!); return null; }
-        return { ...prev, countdown: prev.countdown - 1 };
-      });
+  // Count the undo window down one second at a time
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => {
+      setUndo(prev =>
+        prev ? (prev.countdown <= 1 ? null : { ...prev, countdown: prev.countdown - 1 }) : null
+      );
     }, 1000);
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  /* ---------------- actions ---------------- */
+
+  async function handleAction(uc: UC, action: NextAction) {
+    setActingId(uc.id);
+    setError("");
+    try {
+      await updateDoc(doc(ucReturnsCol, uc.id), {
+        ...action.fields(),
+        updatedAt: serverTimestamp(),
+      });
+      setUndo({ ucId: uc.id, prevFields: action.undo, message: action.message, countdown: 10 });
+      setTimeout(() => refreshAlerts(), 1500);
+    } catch (err) {
+      console.error("UC action error:", err);
+      setError("Could not update this return. Please try again.");
+    } finally {
+      setActingId(null);
+    }
   }
 
   async function handleUndo() {
-    if (!undoState) return;
-    clearInterval(undoTimer.current!);
-    await updateDoc(doc(ucReturnsCol, undoState.ucId), {
-      ...undoState.prevFields, updatedAt: serverTimestamp(),
-    });
-    setTimeout(() => refreshAlerts(), 1500);
-    setUndoState(null);
+    if (!undo) return;
+    const { ucId, prevFields } = undo;
+    setUndo(null);
+    try {
+      await updateDoc(doc(ucReturnsCol, ucId), { ...prevFields, updatedAt: serverTimestamp() });
+      setTimeout(() => refreshAlerts(), 1500);
+    } catch (err) {
+      console.error("UC undo error:", err);
+      setError("Could not undo that change. Please check the return and fix it by hand.");
+    }
   }
 
-  async function handleDelete(uc: UCReturn) {
+  async function handleDelete(uc: UC) {
     await deleteDoc(doc(ucReturnsCol, uc.id));
     setToDelete(null);
   }
 
-  const activeReturns = allReturns.filter(r => r.status !== "closed");
+  /* ---------------- derived ---------------- */
+
+  const active = useMemo(() => all.filter(r => r.status !== "closed"), [all]);
+  const closed = useMemo(() => all.filter(r => r.status === "closed"), [all]);
+
+  const stats = useMemo(() => {
+    let withUs = 0;
+    let withCeat = 0;
+    let follow = 0;
+    let noReplacement = 0;
+    let tyres = 0;
+    let value = 0;
+    for (const r of active) {
+      if (r.status === "approved") withUs += 1;
+      else withCeat += 1;
+      if (followUp(r)) follow += 1;
+      if (!r.gaveTyreToShop) noReplacement += 1;
+      tyres += Number(r.qty) || 0;
+      value += valueOf(r);
+    }
+    return { withUs, withCeat, follow, noReplacement, tyres, value };
+  }, [active]);
+
+  const shown = useMemo(() => {
+    if (tab === "closed") {
+      return [...closed].sort(
+        (a, b) =>
+          (toDate(b.replacementReceivedAt)?.getTime() ?? 0) -
+          (toDate(a.replacementReceivedAt)?.getTime() ?? 0)
+      );
+    }
+    return active
+      .filter(r => {
+        if (filter === "us") return r.status === "approved";
+        if (filter === "ceat") return r.status !== "approved";
+        if (filter === "follow") return !!followUp(r);
+        return true;
+      })
+      .sort((a, b) => {
+        const fa = followUp(a) ? 1 : 0;
+        const fb = followUp(b) ? 1 : 0;
+        if (fa !== fb) return fb - fa;
+        return (toDate(a.tyreReceivedAt)?.getTime() ?? 0) - (toDate(b.tyreReceivedAt)?.getTime() ?? 0);
+      });
+  }, [tab, active, closed, filter]);
+
+  const kpis: StatItem[] = [
+    { label: "Tyres with us", value: String(stats.withUs), hint: "Not yet sent to CEAT" },
+    { label: "With CEAT", value: String(stats.withCeat), hint: "Waiting on a replacement" },
+    {
+      label: "Needs follow-up",
+      value: String(stats.follow),
+      hint: stats.follow > 0
+        ? <span className="text-amber-700">Late or waiting too long</span>
+        : "Nothing overdue",
+    },
+    {
+      label: "No replacement given",
+      value: String(stats.noReplacement),
+      hint: "Shop is still waiting",
+    },
+  ];
+
+  const addReturn = (
+    <Link
+      href="/dashboard/uc-returns/new"
+      className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 sm:h-10"
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      Add return
+    </Link>
+  );
+
+  /* ---------------- render ---------------- */
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium text-gray-900">UC Returns</h1>
-          <p className="text-sm text-gray-500">Track defective tyre returns from shops</p>
-        </div>
-        <Link href="/dashboard/uc-returns/new">
-          <Button className="gap-1.5">
-            <Plus className="h-4 w-4" /> Add return
-          </Button>
-        </Link>
-      </div>
-
-      {/* Summary */}
-      {activeReturns.length > 0 && <Summary returns={activeReturns} />}
-
-      {/* Tabs */}
-      <Tabs
-        className="mb-4"
-        active={tab}
-        onChange={k => setTab(k as TabKey)}
-        options={[
-          { key: "active", label: `Active (${activeReturns.length})` },
-          { key: "closed", label: `Closed (${allReturns.filter(r => r.status === "closed").length})` },
-        ]}
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Returns"
+        description="Defective tyres from shops, from collection to CEAT replacement"
+        actions={addReturn}
       />
 
+      <StatStrip items={kpis} loading={loading} className="mb-6" />
+
+      {/* Tabs */}
+      <div className="mb-6 border-b border-gray-200">
+        <div role="tablist" aria-label="Return status" className="scrollbar-none -mb-px flex gap-1 overflow-x-auto">
+          {([
+            { key: "active", label: "Active", count: active.length },
+            { key: "closed", label: "Closed", count: closed.length },
+          ] as { key: Tab; label: string; count: number }[]).map(t => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => { setTab(t.key); setFilter("all"); }}
+              className={cn(
+                "flex flex-shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors",
+                tab === t.key
+                  ? "border-brand-600 text-gray-900"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+              )}
+            >
+              {t.label}
+              <span className="rounded-full bg-gray-100 px-1.5 text-xs tabular-nums text-gray-600">
+                {t.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter pills (active tab only) */}
+      {tab === "active" && active.length > 0 && (
+        <div
+          className="scrollbar-none -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0"
+          role="group"
+          aria-label="Filter active returns"
+        >
+          {([
+            { key: "all", label: "All", count: active.length },
+            { key: "us", label: "With us", count: stats.withUs },
+            { key: "ceat", label: "With CEAT", count: stats.withCeat },
+            { key: "follow", label: "Needs follow-up", count: stats.follow },
+          ] as { key: Filter; label: string; count: number }[]).map(f => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={filter === f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "inline-flex h-10 flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors",
+                filter === f.key
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              )}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-xs tabular-nums",
+                  filter === f.key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                )}
+              >
+                {f.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
       {loading && (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
-        </div>
-      )}
-
-      {!loading && displayed.length === 0 && (
-        <div className="flex flex-col items-center py-14 text-center bg-white rounded-2xl border border-gray-100">
-          <div className="h-12 w-12 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-            <PackageCheck className="h-6 w-6 text-gray-400" />
+        <Panel flush>
+          <div className="space-y-3 p-4">
+            {[0, 1].map(i => (
+              <div key={i} className="h-40 animate-pulse rounded-lg bg-gray-100" />
+            ))}
           </div>
-          <p className="text-sm font-medium text-gray-600">
-            {tab === "active" ? "No active UC returns" : "No closed returns yet"}
-          </p>
-          {tab === "active" && (
-            <Link href="/dashboard/uc-returns/new" className="mt-4">
-              <Button size="sm">Add first return</Button>
-            </Link>
-          )}
-        </div>
+        </Panel>
       )}
 
-      {displayed.map(uc => (
-        <UCCard
-          key={uc.id}
-          uc={uc}
-          isAdmin={isAdmin}
-          onAction={handleAction}
-          onDelete={setToDelete}
-          onEdit={setEditUC}
-        />
-      ))}
-
-      {/* Modals */}
-      {undoState && (
-        <UndoToast undo={undoState} onUndo={handleUndo} onDismiss={() => setUndoState(null)} />
+      {!loading && !error && shown.length === 0 && (
+        <Panel>
+          <div className="flex flex-col items-center py-10 text-center">
+            <PackageCheck className="mb-3 h-8 w-8 text-gray-400" aria-hidden="true" />
+            <p className="text-sm font-medium text-gray-900">
+              {tab === "closed"
+                ? "No closed returns yet"
+                : filter !== "all"
+                  ? "Nothing matches this filter"
+                  : "No active returns"}
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              {tab === "closed"
+                ? "Returns move here once CEAT's replacement has arrived."
+                : filter !== "all"
+                  ? "Try another filter."
+                  : "Add a return when a shop brings back a defective tyre."}
+            </p>
+            {tab === "active" && filter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className="mt-3 text-sm font-medium text-brand-700 hover:underline"
+              >
+                Show all
+              </button>
+            )}
+            {tab === "active" && filter === "all" && <div className="mt-4">{addReturn}</div>}
+          </div>
+        </Panel>
       )}
-      {editUC && <EditUCModal uc={editUC} onClose={() => setEditUC(null)} />}
+
+      {!loading && shown.length > 0 && (
+        <Panel
+          title={tab === "active" ? "Active returns" : "Closed returns"}
+          description={
+            tab === "active"
+              ? `${plural(active.length, "return")} · ${plural(stats.tyres, "tyre")} · ${formatLKR(stats.value)} in value`
+              : plural(shown.length, "return")
+          }
+          flush
+        >
+          <ul className="divide-y divide-gray-100">
+            {shown.map(uc => (
+              <UCItem
+                key={uc.id}
+                uc={uc}
+                isAdmin={isAdmin}
+                busy={actingId === uc.id}
+                onAction={handleAction}
+                onEdit={setEditing}
+                onDelete={setToDelete}
+              />
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      {undo && <UndoToast undo={undo} onUndo={handleUndo} />}
+      {editing && <EditUCModal uc={editing} onClose={() => setEditing(null)} />}
       {toDelete && (
         <DeleteConfirmDialog
-          title="Delete UC return"
-          description={`${toDelete.shopName} · ${toDelete.qty}× ${toDelete.productName}\n${REASON_LABELS[toDelete.reason] ?? toDelete.reason}`}
+          title="Delete Return"
+          description={`${toDelete.shopName} · ${toDelete.qty}x ${toDelete.productName}\n${REASON_LABELS[toDelete.reason] ?? toDelete.reason}`}
           onConfirm={() => handleDelete(toDelete)}
           onCancel={() => setToDelete(null)}
         />
       )}
-
-      {/* Animation keyframe */}
-      <style>{`
-        @keyframes slideUp {
-          from { transform: translate(-50%, 20px); opacity: 0; }
-          to   { transform: translate(-50%, 0);    opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }

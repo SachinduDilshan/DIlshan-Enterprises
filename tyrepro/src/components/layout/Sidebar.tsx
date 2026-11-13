@@ -28,7 +28,7 @@ const NAV_SECTIONS = [
     label: "Operations",
     items: [
       { href: "/dashboard/inventory", label: "Inventory", icon: Package, roles: ["admin", "sales_rep"] },
-      { href: "/dashboard/uc-returns", label: "UC Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
+      { href: "/dashboard/uc-returns", label: "Returns", icon: RotateCcw, roles: ["admin", "sales_rep"] },
       { href: "/dashboard/dispatch", label: "Dispatch (Coming Soon)", icon: Truck, roles: ["admin", "sales_rep", "driver"] },
     ],
   },
