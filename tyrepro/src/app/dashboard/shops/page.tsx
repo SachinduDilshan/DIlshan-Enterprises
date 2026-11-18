@@ -117,7 +117,7 @@ export default function ShopsPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by name, owner or city"
             aria-label="Search shops"
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-10"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-950 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-10"
           />
         </div>
 

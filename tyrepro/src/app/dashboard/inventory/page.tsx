@@ -1066,7 +1066,7 @@ export default function InventoryPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={tab === "stock" ? "Product name or SKU" : "Search products"}
-              className="h-[42px] w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="h-[42px] w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-950 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </div>

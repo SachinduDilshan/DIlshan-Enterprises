@@ -129,7 +129,10 @@ export default function ShopSalesReport() {
         </div>
       </div>
 
-      <Input placeholder="Search shop..." value={search} onChange={e => setSearch(e.target.value)} />
+      <Input placeholder="Search shop..."
+        className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-950 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-10"
+        value={search}
+        onChange={e => setSearch(e.target.value)} />
 
       <Card className="flex items-center justify-between bg-brand-700 border-0 text-white gap-2 min-w-0">
         <div className="min-w-0">
