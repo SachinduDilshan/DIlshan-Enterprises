@@ -118,7 +118,7 @@ export function MobileHeader() {
           MOBILE HEADER
       ========================================================= */}
 
-      <header className="sticky top-0 z-40 flex h-[56px] items-center justify-between bg-brand-900 px-4 md:hidden">
+      <header className="sticky top-0 z-40 flex h-[56px] items-center justify-between bg-blue-950 px-4 md:hidden">
 
         {/* Brand */}
 
@@ -163,7 +163,7 @@ export function MobileHeader() {
               ${
                 showProfile
                   ? "bg-white/25 ring-white/30"
-                  : "bg-brand-500"
+                  : "bg-brand-700"
               }
             `}
           >

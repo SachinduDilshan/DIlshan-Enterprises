@@ -140,9 +140,9 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60"
-              style={{ background: loading ? "#4338CA" : "#2D2B55" }}
-              onMouseEnter={e => !loading && ((e.target as HTMLButtonElement).style.background = "#403d81")}
-              onMouseLeave={e => !loading && ((e.target as HTMLButtonElement).style.background = "#2D2B55")}
+              style={{ background: loading ? "#4338CA" : "#100c5f" }}
+              onMouseEnter={e => !loading && ((e.target as HTMLButtonElement).style.background = "#5c57b3")}
+              onMouseLeave={e => !loading && ((e.target as HTMLButtonElement).style.background = "#100c5f")}
             >
               {loading ? (
                 <>

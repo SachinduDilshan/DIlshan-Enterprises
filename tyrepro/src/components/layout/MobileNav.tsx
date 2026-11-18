@@ -71,7 +71,7 @@ export function MobileNav() {
         left:       0,
         right:      0,
         zIndex:     9999,
-        background: "#2D2B55",
+        background: "#100c5f",
         borderTop:  "0.5px solid #e5e7eb",
         display:    "flex",
         alignItems: "stretch",
@@ -88,7 +88,7 @@ export function MobileNav() {
                 justifyContent: "center",
                 gap:            "3px",
                 padding:        "8px 0 10px",
-                color:          active ? "#6f68f7" : "#9ca3af",
+                color:          active ? "#9f9af8" : "#a7acb4",
                 fontSize:       "10px",
                 fontWeight:     500,
               }}>

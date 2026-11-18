@@ -84,8 +84,8 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-full flex-col" style={{ background: "#2D2B55" }}>
-      {/* Brand */}
+    <aside className="flex h-full w-full flex-col" style={{ background: "#100c5f" }}>
+      {/* Brand, former colour 2D2B55 */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
         <div>
           <p className="text-sm font-medium text-white leading-tight">Dilshan Enterprises</p>
@@ -111,8 +111,8 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors relative",
                       active
-                        ? "text-white bg-white/10"
-                        : "text-white/55 hover:text-white/80 hover:bg-white/5"
+                        ? "text-white bg-white/35"
+                        : "text-white/55 hover:text-white/90 hover:bg-white/20"
                     )}>
                     {active && (
                       <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-300 rounded-r" />
@@ -157,7 +157,7 @@ export function Sidebar() {
           <button
             onClick={() => setShowLogout(true)}
             title="Sign out"
-            className="text-white/30 hover:text-white/70 transition-colors"
+            className="text-white/70 hover:text-white/100 transition-colors"
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>
