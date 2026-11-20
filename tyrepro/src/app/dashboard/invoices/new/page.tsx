@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  addDoc, doc, runTransaction, serverTimestamp,
-  Timestamp, getDoc, collection, increment, setDoc,
+  doc, runTransaction, serverTimestamp,
+  Timestamp, getDoc, increment, setDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,14 +12,16 @@ import { useShops } from "@/hooks/useShops";
 import { useProducts } from "@/hooks/useProducts";
 import { useStock } from "@/hooks/useStock";
 import { formatLKR } from "@/lib/utils";
-import { invoicesCol, chequesCol, stockCol } from "@/lib/firestore-collections";
+import {
+  invoicesCol, invoiceItemsCol, chequesCol, stockCol,
+} from "@/lib/firestore-collections";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Plus, Trash2, ArrowLeft, ChevronDown, Check } from "lucide-react";
 import Link from "next/link";
-import type { Product } from "@/types";
+import type { Invoice, Product } from "@/types";
 import { triggerAlerts } from "@/lib/triggerAlerts";
 
 // ── Types ─────────────────────────────────────────────────
@@ -32,26 +34,49 @@ interface LineItem {
   unitPrice: number;
 }
 
+type Method = "cash" | "card" | "cheque" | "pending";
+type Term = "" | "15" | "30" | "45" | "60" | "custom";
+
 // ── Payment options ───────────────────────────────────────
 
-type InvoicePaymentType =
-  | "cash"
-  | "cheque_15d"
-  | "cheque_30d"
-  | "cheque_45d"
-  | "cheque_60d";
-
-type PaymentType = InvoicePaymentType | "card" | "pending";
-
-const PAYMENT_OPTS: Array<{ value: PaymentType; label: string; desc: string; emoji: string }> = [
-  { value: "cash", label: "Cash", desc: "Paid immediately", emoji: "💵" },
-  { value: "card", label: "Card payment", desc: "Debit / credit card", emoji: "💳" },
-  { value: "cheque_15d", label: "Cheque — 15 days", desc: "Due in 15 days", emoji: "🏦" },
-  { value: "cheque_30d", label: "Cheque — 30 days", desc: "Due in 30 days", emoji: "🏦" },
-  { value: "cheque_45d", label: "Cheque — 45 days", desc: "Due in 45 days", emoji: "🏦" },
-  { value: "cheque_60d", label: "Cheque — 60 days", desc: "Due in 60 days", emoji: "🏦" },
+const METHODS: { value: Method; label: string; desc: string; emoji: string }[] = [
+  { value: "cash",    label: "Cash",             desc: "Paid immediately",        emoji: "💵" },
+  { value: "card",    label: "Card/Online payment",     desc: "Debit / credit card",     emoji: "💳" },
+  { value: "cheque",  label: "Cheque",           desc: "Post-dated cheque",       emoji: "🏦" },
   { value: "pending", label: "Pending / Credit", desc: "Payment to be collected", emoji: "⏳" },
 ];
+
+const CHEQUE_TERMS = [15, 30, 45, 60];
+
+// What gets saved on the invoice. Reports read these values.
+function storedPaymentType(method: Method, term: Term): string {
+  if (method !== "cheque") return method;
+  if (term === "" || term === "custom") return "cheque_custom";
+  return `cheque_${term}d`;
+}
+
+// ── Local date helpers (no UTC shift) ─────────────────────
+
+function toInputDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dateInDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return toInputDate(d);
+}
+
+function daysFromToday(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const due = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
 
 // ── Auto-generate invoice number ──────────────────────────
 
@@ -66,20 +91,6 @@ async function nextInvoiceNo(): Promise<string> {
   const snap = await getDoc(counterRef);
   const next = (snap.exists() ? snap.data().count : 0) + 1;
   return `INV-${dateStr}-${String(next).padStart(4, "0")}`;
-}
-
-// ── Helper: days from payment type ───────────────────────
-
-function daysFromPaymentType(paymentType: string): number | null {
-  if (!paymentType.startsWith("cheque_")) return null;
-  const days = parseInt(paymentType.replace("cheque_", "").replace("d", ""));
-  return isNaN(days) ? null : days;
-}
-
-function dateStringFromDays(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
 }
 
 // ── Tyre name font size ───────────────────────────────────
@@ -167,7 +178,8 @@ export default function NewInvoicePage() {
 
   const [shopId, setShopId] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [method, setMethod] = useState<Method>("cash");
+  const [term, setTerm] = useState<Term>("");
   const [chequeNo, setChequeNo] = useState("");
   const [bank, setBank] = useState("");
   const [chequeDueDate, setChequeDueDate] = useState("");
@@ -175,28 +187,39 @@ export default function NewInvoicePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const isCheque = paymentType.startsWith("cheque_");
-  const isPending = paymentType === "pending";
-  const isCard = paymentType === "card";
+  const isCheque = method === "cheque";
+  const isPending = method === "pending";
+  const isCard = method === "card";
   const total = lineItems.reduce((s, li) => s + li.qty * li.unitPrice, 0);
   const selectedShop = shops.find(s => s.id === shopId) ?? null;
 
-  // ── Auto-fill due date when cheque type changes ──────
-  useEffect(() => {
-    if (!isCheque) {
-      setChequeDueDate("");
-      return;
-    }
-    const days = daysFromPaymentType(paymentType);
-    if (days !== null) {
-      setChequeDueDate(dateStringFromDays(days));
-    }
-  }, [paymentType, isCheque]);
+  const todayStr = toInputDate(new Date());
+  const dueIn = daysFromToday(chequeDueDate);
 
   // ── Generate invoice number on mount ────────────────
   useEffect(() => {
     nextInvoiceNo().then(setInvoiceNo);
   }, []);
+
+  // ── Payment helpers ──────────────────────────────────
+
+  function chooseMethod(next: Method) {
+    setMethod(next);
+    setError("");
+    if (next !== "cheque") {
+      setTerm("");
+      setChequeDueDate("");
+    }
+  }
+
+  function chooseTerm(next: Term) {
+    setTerm(next);
+    setError("");
+    if (next !== "" && next !== "custom") {
+      setChequeDueDate(dateInDays(parseInt(next, 10)));
+    }
+    // Custom date keeps whatever date is showing so it can be adjusted
+  }
 
   // ── Line item helpers ────────────────────────────────
 
@@ -228,19 +251,14 @@ export default function NewInvoicePage() {
     }));
   }
 
-  // FIX: allow clearing input then typing fresh value
   function handleQtyChange(index: number, raw: string) {
     const val = raw === "" ? 1 : parseInt(raw);
-    if (!isNaN(val) && val >= 1) {
-      updateLine(index, "qty", val);
-    }
+    if (!isNaN(val) && val >= 1) updateLine(index, "qty", val);
   }
 
   function handlePriceChange(index: number, raw: string) {
     const val = raw === "" ? 0 : parseFloat(raw);
-    if (!isNaN(val) && val >= 0) {
-      updateLine(index, "unitPrice", val);
-    }
+    if (!isNaN(val) && val >= 0) updateLine(index, "unitPrice", val);
   }
 
   function getAvailableStock(productId: string): number {
@@ -262,10 +280,9 @@ export default function NewInvoicePage() {
       setError("Please enter the cheque number and bank name."); return;
     }
     if (isCheque && !chequeDueDate) {
-      setError("Please select a cheque due date."); return;
+      setError("Choose when the cheque is due."); return;
     }
 
-    // Check stock availability
     for (const li of lineItems) {
       const avail = getAvailableStock(li.productId);
       if (li.qty > avail) {
@@ -277,11 +294,10 @@ export default function NewInvoicePage() {
     setSaving(true);
 
     try {
-      // Store only the values allowed by the Firestore invoice schema.
-      const invoicePaymentType: InvoicePaymentType =
-        paymentType === "card" || paymentType === "pending" ? "cash" : paymentType;
+      const paymentType = storedPaymentType(method, term);
+      const firstStock = stock.find(s => s.productId === lineItems[0].productId);
 
-      // 1. Increment counter atomically
+      // 1. Raise the invoice counter
       const counterRef = doc(db, "counters", "invoices");
       await runTransaction(db, async tx => {
         const snap = await tx.get(counterRef);
@@ -289,17 +305,19 @@ export default function NewInvoicePage() {
         tx.set(counterRef, { count: next }, { merge: true });
       });
 
-      // 2. Create invoice using the full invoice schema expected by the Invoice type.
+      // 2. Create the invoice
       const invoiceRef = doc(invoicesCol);
       await setDoc(invoiceRef, {
         id: invoiceRef.id,
         invoiceNo,
         shopId,
         shopName: selectedShop?.name ?? "",
-        warehouseId: "",
-        warehouseName: "",
+        warehouseId: firstStock?.warehouseId ?? "",
+        warehouseName: firstStock?.warehouseName ?? "",
         totalAmount: total,
-        paymentType: invoicePaymentType,
+        // The shared Invoice type lists only the older payment values,
+        // so the real value is cast here instead of being changed to cash.
+        paymentType: paymentType as Invoice["paymentType"],
         status: "confirmed",
         notes: "",
         invoiceDate: serverTimestamp(),
@@ -308,10 +326,24 @@ export default function NewInvoicePage() {
         updatedAt: serverTimestamp(),
       });
 
-      // 3. FIX: Deduct stock using correct stock document ID pattern
+      // 3. Save the product lines (the invoice page reads these)
+      const itemsCol = invoiceItemsCol(invoiceRef.id);
       for (const li of lineItems) {
-        // Stock docs are keyed as warehouseId_productId
-        // Find the matching stock doc by productId
+        const itemRef = doc(itemsCol);
+        await setDoc(itemRef, {
+          id: itemRef.id,
+          invoiceId: invoiceRef.id,
+          productId: li.productId,
+          productName: li.productName,
+          productSku: li.productSku,
+          qty: li.qty,
+          unitPrice: li.unitPrice,
+          lineTotal: li.qty * li.unitPrice,
+        });
+      }
+
+      // 4. Reduce stock
+      for (const li of lineItems) {
         const matchingStock = stock.find(s => s.productId === li.productId);
         if (matchingStock) {
           const stockRef = doc(stockCol, matchingStock.id);
@@ -328,9 +360,9 @@ export default function NewInvoicePage() {
         }
       }
 
-      // 4. Create cheque record
+      // 5. Create the cheque record
       if (isCheque && chequeDueDate) {
-        const due = new Date(chequeDueDate + "T23:59:59");
+        const due = new Date(`${chequeDueDate}T23:59:59`);
         const chequeRef = doc(chequesCol);
         await setDoc(chequeRef, {
           id: chequeRef.id,
@@ -347,8 +379,8 @@ export default function NewInvoicePage() {
         });
       }
 
-      // 5. Pending — update outstanding balance
-      if (isPending) {
+      // 6. Pending and cheque sales are owed money until paid or deposited
+      if (isPending || isCheque) {
         try {
           const shopRef = doc(db, "shops", shopId);
           await runTransaction(db, async tx => {
@@ -364,8 +396,7 @@ export default function NewInvoicePage() {
       }
 
       router.push(`/dashboard/invoices/${invoiceRef.id}`);
-      router.push(`/dashboard/invoices/${invoiceRef.id}`);
-      // Fire alerts in background — don't await so it doesn't block navigation
+      // Fire alerts in the background so it does not block navigation
       triggerAlerts();
     } catch (err: any) {
       setError(err.message);
@@ -388,16 +419,16 @@ export default function NewInvoicePage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/dashboard/invoices">
-          <button type="button"
+          <button type="button" aria-label="Back to invoices"
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50">
             <ArrowLeft className="h-4 w-4 text-gray-500" />
           </button>
         </Link>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-medium text-gray-900">New invoice</h1>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="mt-0.5 flex items-center gap-2">
             <span className="text-xs text-gray-400">Invoice no:</span>
-            <span className="text-xs font-mono font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md">
+            <span className="rounded-md bg-brand-50 px-2 py-0.5 font-mono text-xs font-semibold text-brand-700">
               {invoiceNo || "Generating..."}
             </span>
           </div>
@@ -422,14 +453,14 @@ export default function NewInvoicePage() {
           <div className="mb-3 flex items-center justify-between">
             <CardHeader title="Products" />
             <button type="button" onClick={addLine}
-              className="flex items-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-3 py-2 transition-colors">
+              className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-700">
               <Plus className="h-3.5 w-3.5" /> Add line
             </button>
           </div>
 
           {lineItems.length === 0 && (
             <button type="button" onClick={addLine}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 hover:border-brand-300 py-6 text-sm text-gray-400 hover:text-brand-600 transition-colors">
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-6 text-sm text-gray-400 transition-colors hover:border-brand-300 hover:text-brand-600">
               <Plus className="h-4 w-4" /> Add first product
             </button>
           )}
@@ -440,26 +471,23 @@ export default function NewInvoicePage() {
               const overStock = li.productId !== "" && li.qty > avail;
 
               return (
-                <div key={idx}
-                  className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div key={idx} className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
 
-                  {/* Product selector + remove */}
                   <div className="flex items-start gap-2">
                     <TyreSelect
                       value={li.productId}
                       products={products}
                       onChange={id => updateLine(idx, "productId", id)}
                     />
-                    <button type="button" onClick={() => removeLine(idx)}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors">
+                    <button type="button" onClick={() => removeLine(idx)} aria-label="Remove line"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 transition-colors hover:border-red-300 hover:bg-red-50">
                       <Trash2 className="h-4 w-4 text-gray-400" />
                     </button>
                   </div>
 
-                  {/* Qty + unit price — FIX: use string state for free typing */}
                   <div className="flex gap-2">
                     <div className="min-w-0 flex-1">
-                      <label className="text-xs text-gray-500 mb-1 block">Qty</label>
+                      <label className="mb-1 block text-xs text-gray-500">Qty</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -471,7 +499,7 @@ export default function NewInvoicePage() {
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <label className="text-xs text-gray-500 mb-1 block">Unit price (Rs)</label>
+                      <label className="mb-1 block text-xs text-gray-500">Unit price (Rs)</label>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -484,7 +512,6 @@ export default function NewInvoicePage() {
                     </div>
                   </div>
 
-                  {/* Stock + subtotal */}
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className={overStock ? "font-medium text-red-600" : "text-gray-400"}>
                       Stock: {avail} available
@@ -495,7 +522,7 @@ export default function NewInvoicePage() {
                   </div>
 
                   {overStock && (
-                    <p className="text-xs text-red-600">⚠ Qty exceeds available stock</p>
+                    <p className="text-xs text-red-600">Qty exceeds available stock</p>
                   )}
                 </div>
               );
@@ -514,70 +541,105 @@ export default function NewInvoicePage() {
         <Card>
           <CardHeader title="Payment method" />
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {PAYMENT_OPTS.map(opt => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Payment method">
+            {METHODS.map(opt => (
               <button key={opt.value} type="button"
-                onClick={() => setPaymentType(opt.value)}
-                className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition-colors ${paymentType === opt.value
+                aria-pressed={method === opt.value}
+                onClick={() => chooseMethod(opt.value)}
+                className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  method === opt.value
                     ? "border-brand-400 bg-brand-50 text-brand-800"
-                    : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
-                  }`}>
-                <span className="text-base mb-0.5">{opt.emoji}</span>
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                }`}>
+                <span className="mb-0.5 text-base">{opt.emoji}</span>
                 <span className="text-xs font-medium leading-tight">{opt.label}</span>
-                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{opt.desc}</span>
+                <span className="mt-0.5 text-[10px] leading-tight text-gray-500">{opt.desc}</span>
               </button>
             ))}
           </div>
 
-          {/* Cheque details */}
+          {/* Cheque details: shown only when Cheque is selected */}
           {isCheque && (
-            <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+            <div className="mt-4 space-y-4 border-t border-gray-100 pt-4">
               <Input label="Cheque number *" placeholder="e.g. 001234"
                 value={chequeNo} onChange={e => setChequeNo(e.target.value)} />
               <Input label="Bank *" placeholder="e.g. Commercial Bank"
                 value={bank} onChange={e => setBank(e.target.value)} />
 
-              {/* Due date — auto-filled but editable */}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Cheque due date *
-                </label>
+                <p className="mb-2 text-sm font-medium text-gray-700">
+                  When is the cheque due? *
+                </p>
 
-                {/* Quick preset buttons */}
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {[15, 30, 45, 60, 90].map(days => {
-                    const val = dateStringFromDays(days);
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Cheque due date options">
+                  {CHEQUE_TERMS.map(n => {
+                    const active = term === String(n);
                     return (
-                      <button key={days} type="button"
-                        onClick={() => setChequeDueDate(val)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${chequeDueDate === val
-                            ? "border-brand-400 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300"
-                          }`}>
-                        {days}d
+                      <button key={n} type="button"
+                        aria-pressed={active}
+                        onClick={() => chooseTerm(String(n) as Term)}
+                        className={`h-10 rounded-full border px-4 text-sm font-medium transition-colors ${
+                          active
+                            ? "border-brand-400 bg-brand-50 text-brand-800"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                        }`}>
+                        {n} days
                       </button>
                     );
                   })}
+                  <button type="button"
+                    aria-pressed={term === "custom"}
+                    onClick={() => chooseTerm("custom")}
+                    className={`h-10 rounded-full border px-4 text-sm font-medium transition-colors ${
+                      term === "custom"
+                        ? "border-brand-400 bg-brand-50 text-brand-800"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                    }`}>
+                    Custom date
+                  </button>
                 </div>
 
-                {/* Editable date input */}
-                <input
-                  type="date"
-                  value={chequeDueDate}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={e => setChequeDueDate(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                />
+                {term === "" && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Pick a time period, or choose Custom date to enter your own.
+                  </p>
+                )}
 
-                {/* Display formatted date */}
-                {chequeDueDate && (
-                  <div className="mt-2 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-                    <span className="text-sm text-amber-800">Due date</span>
-                    <span className="text-sm font-semibold text-amber-900">
-                      {new Date(chequeDueDate + "T12:00:00").toLocaleDateString("en-LK", {
-                        day: "numeric", month: "long", year: "numeric",
-                      })}
-                    </span>
+                {term !== "" && (
+                  <div className="mt-3">
+                    <label htmlFor="cheque-due" className="mb-1 block text-xs font-medium text-gray-600">
+                      Due date (you can change it)
+                    </label>
+                    <input
+                      id="cheque-due"
+                      type="date"
+                      min={todayStr}
+                      value={chequeDueDate}
+                      onChange={e => {
+                        setChequeDueDate(e.target.value);
+                        setTerm("custom");
+                      }}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    />
+
+                    {chequeDueDate && (
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <span className="text-sm text-amber-900">
+                          {dueIn === 0
+                            ? "Due today"
+                            : dueIn === 1
+                              ? "Due tomorrow"
+                              : dueIn !== null && dueIn > 1
+                                ? `Due in ${dueIn} days`
+                                : "Due date"}
+                        </span>
+                        <span className="text-right text-sm font-semibold text-amber-900">
+                          {new Date(`${chequeDueDate}T12:00:00`).toLocaleDateString("en-GB", {
+                            day: "numeric", month: "long", year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -585,17 +647,17 @@ export default function NewInvoicePage() {
           )}
 
           {isPending && (
-            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-              <p className="text-xs text-amber-800">
-                ⏳ This invoice will be added to the shop's outstanding balance. Collect payment later.
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs text-amber-900">
+                This invoice will be added to the shop's outstanding balance. Collect payment later.
               </p>
             </div>
           )}
 
           {isCard && (
-            <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
-              <p className="text-xs text-blue-800">
-                💳 Card payment — confirm the transaction has been processed on the terminal.
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-xs text-blue-900">
+                Card payment: confirm the transaction has been processed on the terminal.
               </p>
             </div>
           )}
@@ -603,7 +665,7 @@ export default function NewInvoicePage() {
 
         {/* Error */}
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {error}
           </div>
         )}
