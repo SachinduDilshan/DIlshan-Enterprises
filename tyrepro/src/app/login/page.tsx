@@ -6,7 +6,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/lib/firebase";
 
-const BANNER = "/ceat-dilshan-banner.png";
+const BANNER = "Images/ceat-dilshan-banner.png";
 
 // Shows the right-hand part of the poster (stupa and tyres).
 // If the crop looks off on your screen, change these two numbers.
