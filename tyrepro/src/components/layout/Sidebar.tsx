@@ -11,7 +11,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/ui/NotificationBell";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SignOutDialog } from "@/components/ui/SignOutDialog";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -202,14 +202,10 @@ export function Sidebar() {
       </div>
 
       {showLogout && (
-        <ConfirmDialog
-          title="Sign Out?"
-          description={`You are signed in as ${appUser?.displayName}. You will need to log in again to access TyrePro.`}
-          confirmLabel="Sign out"
-          icon={LogOut}
-          iconBg="bg-red-50"
-          iconColor="text-red-600"
-          confirmClassName="bg-red-800 hover:bg-red-900"
+        <SignOutDialog
+          name={appUser?.displayName}
+          email={appUser?.email}
+          role={appUser?.role}
           onConfirm={handleSignOut}
           onCancel={() => setShowLogout(false)}
         />
