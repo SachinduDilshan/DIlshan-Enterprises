@@ -14,6 +14,26 @@ import { NotificationBell } from "@/components/ui/NotificationBell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 
+/* ------------------------------------------------------------------ */
+/* Sidebar look. Change these three values to adjust the background.   */
+/* ------------------------------------------------------------------ */
+
+const SIDEBAR_IMAGE = "Images/ceat-dilshan-banner.png";
+const SIDEBAR_COLOR = "#100c5f";   // base colour (the same colour as the line below, as numbers)
+const SIDEBAR_RGB = "16, 12, 95";
+// How much of the picture is covered by the sidebar colour.
+// 1 hides the picture. 0.88 keeps a soft picture and clear menu text.
+// Going below about 0.8 makes the menu text harder to read.
+const OVERLAY_STRENGTH = 0.88;
+
+const clamp = (n: number) => Math.min(1, Math.max(0, n));
+
+const SIDEBAR_OVERLAY = `linear-gradient(to bottom,
+  rgba(${SIDEBAR_RGB}, ${clamp(OVERLAY_STRENGTH - 0.08)}) 0%,
+  rgba(${SIDEBAR_RGB}, ${clamp(OVERLAY_STRENGTH)}) 12%,
+  rgba(${SIDEBAR_RGB}, ${clamp(OVERLAY_STRENGTH)}) 70%,
+  rgba(${SIDEBAR_RGB}, ${clamp(OVERLAY_STRENGTH - 0.26)}) 100%)`;
+
 const NAV_SECTIONS = [
   {
     label: "Main",
@@ -84,12 +104,28 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-full flex-col" style={{ background: "#100c5f" }}>
-      {/* Brand, former colour 2D2B55 */}
-      <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
+    <aside
+      className="relative isolate flex h-full w-full flex-col"
+      style={{ backgroundColor: SIDEBAR_COLOR }}
+    >
+      {/* Background picture. It sits behind everything and is clipped to the sidebar. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={SIDEBAR_IMAGE}
+          alt=""
+          decoding="async"
+          className="h-full w-full object-cover"
+          style={{ objectPosition: "50% 50%" }}
+        />
+        <div className="absolute inset-0" style={{ background: SIDEBAR_OVERLAY }} />
+      </div>
+
+      {/* Brand */}
+      <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
         <div>
-          <p className="text-sm font-medium text-white leading-tight">Dilshan Enterprises</p>
-          <p className="text-[11px] text-white/40 leading-tight">Tire Distributor</p>
+          <p className="text-sm font-medium leading-tight text-white">Dilshan Enterprises</p>
+          <p className="text-[11px] leading-tight text-white/60">Tire Distributor</p>
         </div>
         {canSeeAlerts && <NotificationBell position="sidebar" />}
       </div>
@@ -101,7 +137,7 @@ export function Sidebar() {
           if (items.length === 0) return null;
           return (
             <div key={section.label}>
-              <p className="px-4 pt-4 pb-1 text-[10px] font-medium uppercase tracking-wider text-white/30">
+              <p className="px-4 pb-1 pt-4 text-[10px] font-medium uppercase tracking-wider text-white/55">
                 {section.label}
               </p>
               {items.map(({ href, label, icon: Icon }) => {
@@ -109,13 +145,13 @@ export function Sidebar() {
                 return (
                   <Link key={href} href={href}
                     className={cn(
-                      "flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors relative",
+                      "relative flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors",
                       active
-                        ? "text-white bg-white/35"
-                        : "text-white/55 hover:text-white/90 hover:bg-white/20"
+                        ? "bg-white/35 text-white"
+                        : "text-white/55 hover:bg-white/20 hover:text-white/90"
                     )}>
                     {active && (
-                      <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-300 rounded-r" />
+                      <span className="absolute bottom-1 left-0 top-1 w-0.5 rounded-r bg-indigo-300" />
                     )}
                     <Icon className="h-4 w-4 flex-shrink-0" />
                     {label}
@@ -129,8 +165,8 @@ export function Sidebar() {
 
       {/* Live Clock */}
       <div className="border-t border-white/10 px-4 py-3">
-        <div className="rounded-lg bg-white/5 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-white/30">
+        <div className="rounded-lg bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+          <p className="text-[10px] uppercase tracking-wider text-white/55">
             Local Time
           </p>
 
@@ -138,7 +174,7 @@ export function Sidebar() {
             {formattedTime}
           </p>
 
-          <p className="text-[10px] text-white/40">
+          <p className="text-[10px] text-white/60">
             {formattedDate}
           </p>
         </div>
@@ -147,17 +183,18 @@ export function Sidebar() {
       {/* User */}
       <div className="border-t border-white/10 px-3 py-3">
         <div className="flex items-center gap-2.5 px-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/40 text-[11px] font-medium text-white flex-shrink-0">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500/40 text-[11px] font-medium text-white">
             {appUser?.displayName?.[0]?.toUpperCase() ?? "U"}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium text-white truncate">{appUser?.displayName}</p>
-            <p className="text-[10px] text-white/40 capitalize">{appUser?.role?.replace("_", " ")}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-medium text-white">{appUser?.displayName}</p>
+            <p className="text-[10px] capitalize text-white/60">{appUser?.role?.replace("_", " ")}</p>
           </div>
           <button
             onClick={() => setShowLogout(true)}
             title="Sign out"
-            className="text-white/70 hover:text-white/100 transition-colors"
+            aria-label="Sign out"
+            className="text-white/70 transition-colors hover:text-white"
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>
