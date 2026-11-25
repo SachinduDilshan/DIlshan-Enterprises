@@ -109,7 +109,7 @@ export function SignOutDialog({ name, email, role, onConfirm, onCancel }: SignOu
           </div>
           <div className="min-w-0">
             <h2 id="signout-title" className="text-lg font-semibold tracking-tight text-gray-900">
-              Sign out of TyrePro?
+              Sign Out?
             </h2>
             <p id="signout-desc" className="mt-1 text-sm text-gray-600">
               You will need to enter your email and password again to sign back in.
@@ -149,7 +149,7 @@ export function SignOutDialog({ name, email, role, onConfirm, onCancel }: SignOu
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="h-11 flex-1 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-10"
+            className="h-11 flex-1 rounded-lg border border-gray-300 bg-white text-sm font-medium text-brand-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-10"
           >
             Stay signed in
           </button>
@@ -158,7 +158,7 @@ export function SignOutDialog({ name, email, role, onConfirm, onCancel }: SignOu
             type="button"
             onClick={handleConfirm}
             disabled={busy}
-            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 sm:h-10"
+            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70 sm:h-10"
           >
             {busy ? (
               <>
