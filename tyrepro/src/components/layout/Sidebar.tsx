@@ -12,18 +12,15 @@ import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/ui/NotificationBell";
 import { SignOutDialog } from "@/components/ui/SignOutDialog";
+import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/utils";
 
-/* ------------------------------------------------------------------ */
-/* Sidebar look. Change these three values to adjust the background.   */
-/* ------------------------------------------------------------------ */
+/* Sidebar look. Change these values to adjust the background. */
 
-const SIDEBAR_IMAGE = "Images/ceat-dilshan-banner.png";
-const SIDEBAR_COLOR = "#100c5f";   // base colour (the same colour as the line below, as numbers)
+const SIDEBAR_IMAGE = "/ceat-dilshan-banner.png";
+const SIDEBAR_COLOR = "#100c5f";
 const SIDEBAR_RGB = "16, 12, 95";
-// How much of the picture is covered by the sidebar colour.
 // 1 hides the picture. 0.88 keeps a soft picture and clear menu text.
-// Going below about 0.8 makes the menu text harder to read.
 const OVERLAY_STRENGTH = 0.88;
 
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
@@ -108,7 +105,7 @@ export function Sidebar() {
       className="relative isolate flex h-full w-full flex-col"
       style={{ backgroundColor: SIDEBAR_COLOR }}
     >
-      {/* Background picture. It sits behind everything and is clipped to the sidebar. */}
+      {/* Background picture, behind everything and clipped to the sidebar */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -123,10 +120,9 @@ export function Sidebar() {
 
       {/* Brand */}
       <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
-        <div>
-          <p className="text-sm font-medium leading-tight text-white">Dilshan Enterprises</p>
-          <p className="text-[11px] leading-tight text-white/60">Tire Distributor</p>
-        </div>
+        <Link href="/dashboard" aria-label="Dilshan Enterprises, go to dashboard">
+          <Logo variant="white" size={34} />
+        </Link>
         {canSeeAlerts && <NotificationBell position="sidebar" />}
       </div>
 

@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { Logo } from "@/components/ui/Logo";
 
 const BANNER = "Images/ceat-dilshan-banner.png";
-
-// Shows the right-hand part of the poster (stupa and tyres).
-// If the crop looks off on your screen, change these two numbers.
 const BANNER_POSITION = "50% 42%";
 
 const FEATURES = [
@@ -28,29 +26,6 @@ const ERROR_TEXT: Record<string, string> = {
   "auth/too-many-requests": "Too many attempts. Wait a few minutes and try again.",
   "auth/network-request-failed": "No internet connection. Check your network and try again.",
 };
-
-function LogoMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 28 28" fill="none" className={className} aria-hidden="true">
-      <circle cx="14" cy="14" r="9" stroke="currentColor" strokeWidth="2.5" />
-      <circle cx="14" cy="14" r="3.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function Lockup() {
-  return (
-    <div className="flex items-center gap-3 text-white">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-inset ring-white/30">
-        <LogoMark className="h-6 w-6" />
-      </div>
-      <div>
-        <p className="text-base font-semibold leading-tight">TyrePro</p>
-        <p className="text-xs text-white/85">Dilshan Enterprises</p>
-      </div>
-    </div>
-  );
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -88,16 +63,18 @@ export default function LoginPage() {
   }
 
   const inputClass = (invalid: boolean) =>
-    `h-11 w-full rounded-lg border bg-white px-3 text-base text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 sm:text-sm ${invalid
-      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-      : "border-gray-300 focus:border-brand-500 focus:ring-brand-100"
+    `h-11 w-full rounded-lg border bg-white px-3 text-base text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 sm:text-sm ${
+      invalid
+        ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+        : "border-gray-300 focus:border-brand-500 focus:ring-brand-100"
     }`;
 
   return (
     <div className="flex min-h-screen flex-col bg-white lg:flex-row">
 
-      {/* Phone and tablet: photo strip with the logo */}
+      {/* Phone and tablet: picture strip with the logo */}
       <header className="relative h-40 overflow-hidden bg-[#2D2B55] lg:hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BANNER}
           alt=""
@@ -110,12 +87,13 @@ export default function LoginPage() {
           style={{ background: "linear-gradient(to top, rgba(22,21,47,0.8), rgba(22,21,47,0.05))" }}
         />
         <div className="relative flex h-full items-end p-5">
-          <Lockup />
+          <Logo variant="white" size={44} />
         </div>
       </header>
 
       {/* Desktop: brand panel */}
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#2D2B55] p-10 text-white lg:flex lg:w-[46%] xl:w-1/2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BANNER}
           alt=""
@@ -132,11 +110,11 @@ export default function LoginPage() {
         />
 
         <div className="relative">
-          <Lockup />
+          <Logo variant="white" size={56} />
         </div>
 
         <div className="relative">
-          <p className="text-3xl font-semibold tracking-tight xl:text-4xl">Dilshan Enterprises</p>
+          <p className="text-3xl font-semibold tracking-tight xl:text-4xl">Dealership management</p>
           <p className="mt-2 text-sm text-white/85">
             CEAT tyre dealer, Anuradhapura, Sri Lanka
           </p>

@@ -1,102 +1,200 @@
-/**
- * Export utilities for reports
- * PDF uses browser print API (no extra library needed)
- * Excel uses SheetJS (xlsx) which is already in package.json
- */
+import * as XLSX from "xlsx";
 
-// ── Excel export ──────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* Excel                                                               */
+/* ------------------------------------------------------------------ */
 
-export async function exportToExcel(
-  rows:     Record<string, string | number>[],
-  filename: string,
-  sheetName = "Report"
-) {
-  const XLSX = await import("xlsx");
-  const ws   = XLSX.utils.json_to_sheet(rows);
-  const wb   = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-  // Auto column widths
-  const colWidths = Object.keys(rows[0] ?? {}).map(key => ({
-    wch: Math.max(key.length, ...rows.map(r => String(r[key] ?? "").length)) + 2,
-  }));
-  ws["!cols"] = colWidths;
-
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+function safeSheetName(name: string): string {
+  return (name || "Sheet1").replace(/[\\/?*[\]:]/g, " ").slice(0, 31);
 }
 
-// ── PDF export ────────────────────────────────────────────
-// Opens a print-ready HTML page in a new tab → user saves as PDF
+export function exportToExcel(
+  rows: Record<string, any>[],
+  fileName: string,
+  sheetName = "Sheet1"
+) {
+  if (!rows || rows.length === 0) return;
+
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0]);
+
+  // Column widths follow the longest value in each column
+  sheet["!cols"] = headers.map(h => {
+    const longest = rows.reduce(
+      (max, r) => Math.max(max, String(r[h] ?? "").length),
+      h.length
+    );
+    return { wch: Math.min(Math.max(longest + 2, 10), 48) };
+  });
+
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, safeSheetName(sheetName));
+  XLSX.writeFile(book, `${fileName}.xlsx`);
+}
+
+/* ------------------------------------------------------------------ */
+/* PDF (opens the browser print window, choose Save as PDF)            */
+/* ------------------------------------------------------------------ */
+
+export interface PdfSummaryItem {
+  label: string;
+  value: string;
+}
+
+type Cell = string | number | null | undefined;
+
+const NAVY = "#15136B";
+const ORANGE = "#F28B4A";
+
+// The company mark (letter D inside a tyre), as a small inline image
+const LOGO_MARK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="54" height="54">
+<circle cx="100" cy="100" r="92" fill="none" stroke="${NAVY}" stroke-width="14" stroke-dasharray="17.23 5" stroke-dashoffset="8.6" transform="rotate(-90 100 100)"/>
+<circle cx="100" cy="100" r="78" fill="none" stroke="${NAVY}" stroke-width="8"/>
+<g transform="translate(100 100) scale(1.15) translate(-100 -100)">
+<path fill-rule="evenodd" d="M63 58 H95 A42 42 0 0 1 95 142 H63 Z M85 78 H95 A22 22 0 0 1 95 122 H85 Z" fill="${NAVY}"/>
+<circle cx="98.5" cy="100" r="8.5" fill="${ORANGE}"/>
+</g></svg>`;
+
+function esc(value: Cell): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+const NUMERIC = /^(rs\.?|lkr)?\s?-?[\d,]+(\.\d+)?%?$/i;
+
+function isNumericColumn(rows: ReadonlyArray<ReadonlyArray<Cell>>, index: number): boolean {
+  const values = rows.map(r => String(r[index] ?? "").trim()).filter(Boolean);
+  return values.length > 0 && values.every(v => NUMERIC.test(v));
+}
 
 export function exportToPDF(
-  title:    string,
+  title: string,
   subtitle: string,
-  headers:  string[],
-  rows:     (string | number)[][],
-  summaryRows?: { label: string; value: string }[]
+  headers: string[],
+  rows: ReadonlyArray<ReadonlyArray<Cell>>,
+  summary: PdfSummaryItem[] = []
 ) {
-  const tableRows = rows.map(row =>
-    `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`
-  ).join("");
+  if (typeof window === "undefined") return;
 
-  const summaryHtml = summaryRows
-    ? `<div class="summary">
-        ${summaryRows.map(s => `
-          <div class="summary-row">
-            <span class="summary-label">${s.label}</span>
-            <span class="summary-value">${s.value}</span>
-          </div>`).join("")}
-       </div>`
+  const landscape = headers.length > 6;
+  const right = headers.map((_, i) => isNumericColumn(rows, i));
+
+  const generated = new Date().toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const summaryHtml = summary.length
+    ? `<div class="summary">${summary
+        .map(
+          s => `<div class="stat"><div class="stat-label">${esc(s.label)}</div><div class="stat-value">${esc(s.value)}</div></div>`
+        )
+        .join("")}</div>`
     : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
+  const headHtml = headers
+    .map((h, i) => `<th class="${right[i] ? "num" : ""}">${esc(h)}</th>`)
+    .join("");
+
+  const bodyHtml = rows.length
+    ? rows
+        .map(
+          r =>
+            `<tr>${headers
+              .map((_, i) => `<td class="${right[i] ? "num" : ""}">${esc(r[i])}</td>`)
+              .join("")}</tr>`
+        )
+        .join("")
+    : `<tr><td colspan="${headers.length}" class="empty">No records for this report.</td></tr>`;
+
+  const html = `<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>${title}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
-    .header { margin-bottom: 20px; border-bottom: 2px solid #534AB7; padding-bottom: 12px; }
-    .company { font-size: 18px; font-weight: bold; color: #534AB7; }
-    .subtitle { font-size: 12px; color: #666; margin-top: 2px; }
-    .report-title { font-size: 15px; font-weight: bold; margin-top: 8px; }
-    .generated { font-size: 11px; color: #999; margin-top: 4px; }
-    .summary { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-    .summary-row { background: #f4f3ff; border-radius: 6px; padding: 8px 14px; min-width: 140px; }
-    .summary-label { display: block; font-size: 10px; color: #666; }
-    .summary-value { display: block; font-size: 16px; font-weight: bold; color: #534AB7; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th { background: #534AB7; color: white; padding: 8px 10px; text-align: left; font-size: 11px; }
-    td { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-    tr:nth-child(even) td { background: #f9f9f9; }
-    .footer { margin-top: 20px; font-size: 10px; color: #aaa; text-align: center; }
-    @media print {
-      body { padding: 0; }
-      @page { margin: 15mm; }
-    }
-  </style>
+<meta charset="utf-8">
+<title>${esc(title)} - ${esc(subtitle)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: A4 ${landscape ? "landscape" : "portrait"};
+    margin: 14mm 12mm 16mm;
+    @bottom-left { content: "Dilshan Enterprises"; font: 9px Arial, sans-serif; color: #6B6D80; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9px Arial, sans-serif; color: #6B6D80; }
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; color: #1F2033; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 12px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-name { font-family: "Poppins", Arial, sans-serif; font-weight: 700; font-size: 22px; line-height: 1; color: ${NAVY}; letter-spacing: -0.2px; }
+  .brand-sub { font-family: "Poppins", Arial, sans-serif; font-weight: 500; font-size: 9px; line-height: 1; margin-top: 5px; color: ${NAVY}; letter-spacing: 0.3em; text-transform: uppercase; }
+  .meta { text-align: right; }
+  .doc-title { font-size: 17px; font-weight: 700; color: #1F2033; }
+  .doc-sub { margin-top: 3px; font-size: 11px; color: #5B5D72; }
+  .rule { height: 3px; background: ${NAVY}; position: relative; margin-bottom: 14px; }
+  .rule::after { content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 64px; background: ${ORANGE}; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .stat { flex: 1 1 120px; border: 1px solid #E3E4EF; border-radius: 6px; padding: 8px 10px; background: #F7F7FB; }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #5B5D72; }
+  .stat-value { margin-top: 3px; font-size: 14px; font-weight: 700; color: ${NAVY}; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  th { background: ${NAVY}; color: #fff; font-size: 10px; font-weight: 600; text-align: left; padding: 7px 8px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #E3E4EF; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #F7F7FB; }
+  .num { text-align: right; white-space: nowrap; }
+  .empty { text-align: center; color: #5B5D72; padding: 24px; }
+  .foot { margin-top: 12px; font-size: 9px; color: #6B6D80; display: flex; justify-content: space-between; }
+</style>
 </head>
 <body>
-  <div class="header">
-    <div class="company">Dilshan Enterprises</div>
-    <div class="subtitle">Tire Distributors — Anuradhapura District</div>
-    <div class="report-title">${title}</div>
-    <div class="generated">Generated: ${new Date().toLocaleString("en-LK")} · ${subtitle}</div>
+  <div class="head">
+    <div class="brand">
+      ${LOGO_MARK}
+      <div>
+        <div class="brand-name">DILSHAN</div>
+        <div class="brand-sub">Enterprises</div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="doc-title">${esc(title)}</div>
+      <div class="doc-sub">${esc(subtitle)}</div>
+    </div>
   </div>
+  <div class="rule"></div>
   ${summaryHtml}
   <table>
-    <thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${tableRows}</tbody>
+    <thead><tr>${headHtml}</tr></thead>
+    <tbody>${bodyHtml}</tbody>
   </table>
-  <div class="footer">Dilshan Enterprises — Confidential · Page 1</div>
-  <script>window.onload = () => window.print();</script>
+  <div class="foot">
+    <span>Generated ${esc(generated)}</span>
+    <span>${rows.length} ${rows.length === 1 ? "record" : "records"}</span>
+  </div>
+  <script>
+    window.addEventListener("load", function () {
+      var ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+      ready.then(function () {
+        setTimeout(function () { window.focus(); window.print(); }, 200);
+      });
+    });
+  </script>
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (win) {
-    win.document.write(html);
-    win.document.close();
+  const win = window.open("", "_blank", "width=1000,height=800");
+  if (!win) {
+    window.alert("Please allow pop-ups for this site to download the PDF report.");
+    return;
   }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
